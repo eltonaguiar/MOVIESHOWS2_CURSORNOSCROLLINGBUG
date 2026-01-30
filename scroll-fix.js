@@ -63,10 +63,10 @@
 
     function applyPlayerSize(size) {
         const heights = {
-            small: "200px",
-            medium: "300px",
-            large: "400px",
-            full: "70vh",
+            small: "40vh",
+            medium: "60vh",
+            large: "85vh",
+            full: "100vh",
         };
 
         const height = heights[size] || heights.large;
@@ -147,6 +147,24 @@
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        font-size: 3.5rem !important;
+        line-height: 1.1 !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+        margin-bottom: 0.5rem !important;
+      }
+      
+      /* Description text */
+      p.text-sm {
+        font-size: 1.25rem !important;
+        line-height: 1.5 !important;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+        max-width: 80% !important;
+      }
+      
+      /* Meta badges */
+      .flex.flex-wrap.gap-2.mt-2 span {
+        font-size: 0.9rem !important;
+        padding: 4px 12px !important;
       }
 
       /* Ensure the bottom info section is fully visible */
@@ -170,23 +188,23 @@
 
       /* Player size CSS classes as backup */
       .player-small iframe[src*="youtube"] {
-        height: 200px !important;
-        max-height: 200px !important;
+        height: 40vh !important;
+        max-height: 40vh !important;
       }
 
       .player-medium iframe[src*="youtube"] {
-        height: 300px !important;
-        max-height: 300px !important;
+        height: 60vh !important;
+        max-height: 60vh !important;
       }
 
       .player-large iframe[src*="youtube"] {
-        height: 400px !important;
-        max-height: 400px !important;
+        height: 85vh !important;
+        max-height: 85vh !important;
       }
 
       .player-full iframe[src*="youtube"] {
-        height: 70vh !important;
-        max-height: 70vh !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
       }
     `;
 
