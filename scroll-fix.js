@@ -353,27 +353,38 @@
 
                     // 2. Load from DB
                     if (allMoviesData.length > 0) {
-                        // Loose fuzzy match
-                        const lowerTitle = title.toLowerCase();
-                        const movie = allMoviesData.find(m => {
-                            const mTitle = m.title.toLowerCase();
-                            return mTitle.includes(lowerTitle) || lowerTitle.includes(mTitle);
+                        // Improved Fuzzy Match Strategy
+                        const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+                        const targetSlug = normalize(title);
+                        const targetTokens = targetSlug.split(' ').filter(t => t.length > 2); // Only significant words
+
+                        let movie = allMoviesData.find(m => {
+                            const mTitle = normalize(m.title);
+                            return mTitle.includes(targetSlug) || targetSlug.includes(mTitle);
                         });
 
+                        // Fallback: Token matching (if at least one significant word matches)
+                        if (!movie && targetTokens.length > 0) {
+                            movie = allMoviesData.find(m => {
+                                const mTitle = normalize(m.title);
+                                // Check if ANY significant token is in the title (and title is somewhat similar)
+                                return targetTokens.some(token => mTitle.includes(token));
+                            });
+                        }
+
                         if (movie) {
-                            console.log(`[MovieShows] Found in DB, adding to feed:`, movie.title);
+                            console.log(`[MovieShows] Found in DB: "${movie.title}"`);
+                            showToast(`Playing: ${movie.title}`);
                             addMovieToFeed(movie, true);
                         } else {
-                            console.warn(`[MovieShows] Movie "${title}" not found in loaded database.`);
-                            // Fallback: Create a "stub" slide if we can't find data? 
-                            // Or just alert user? For now, log.
+                            console.warn(`[MovieShows] Movie "${title}" not found in DB.`);
+                            showToast(`Could not find "${title}"`, true);
                         }
                     } else {
                         console.warn("[MovieShows] Database not loaded yet.");
+                        showToast("Loading database...", true);
                         loadMoviesData().then(() => {
-                            // Don't click again recursively, just retry the logic manually
-                            // to avoid infinite loops
-                            isProcessingCarouselClick = false; // Reset lock to allow retry
+                            isProcessingCarouselClick = false;
                             target.dispatchEvent(new Event('click'));
                         });
                     }
@@ -382,6 +393,45 @@
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Simple Toast Notification
+    function showToast(message, isError = false) {
+        let toast = document.getElementById('movieshows-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'movieshows-toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0,0,0,0.85);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: bold;
+                z-index: 10000;
+                pointer-events: none;
+                transition: opacity 0.3s;
+                opacity: 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                text-align: center;
+                backdrop-filter: blur(4px);
+                border: 1px solid rgba(255,255,255,0.1);
+            `;
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.style.color = isError ? '#f87171' : '#4ade80'; // Red or Green
+        toast.style.opacity = '1';
+
+        // Hide previous timeout
+        if (toast.timeout) clearTimeout(toast.timeout);
+        toast.timeout = setTimeout(() => {
+            toast.style.opacity = '0';
+        }, 2000);
     }
 
     function injectStyles() {
