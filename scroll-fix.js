@@ -643,8 +643,9 @@
             <div class="relative w-full h-full flex items-center justify-center overflow-hidden snap-center bg-transparent">
                 <div class="absolute inset-0 w-full h-full bg-black">
                      <iframe 
-                        src="${embedUrl}" 
-                        class="w-full h-full object-cover" 
+                        data-src="${embedUrl}" 
+                        src="" 
+                        class="w-full h-full object-cover lazy-iframe" 
                         allow="autoplay; encrypted-media; picture-in-picture" 
                         allowfullscreen 
                         style="pointer-events: auto;"
@@ -1064,6 +1065,14 @@
                     const size =
                         localStorage.getItem("movieshows-player-size") || "large";
                     setTimeout(() => applyPlayerSize(size), 200);
+
+                    // Also observe new iframes for playback control
+                    const newIframes = Array.from(mutation.addedNodes)
+                        .flatMap(node => node.querySelectorAll ? Array.from(node.querySelectorAll('iframe.lazy-iframe')) : []);
+
+                    if (videoObserver && newIframes.length > 0) {
+                        newIframes.forEach(iframe => videoObserver.observe(iframe));
+                    }
                     break;
                 }
             }
@@ -1072,12 +1081,46 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
+    let videoObserver = null;
+    function setupVideoObserver() {
+        if (videoObserver) return;
+
+        videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const iframe = entry.target;
+                if (entry.isIntersecting) {
+                    // Load src if empty
+                    const dataSrc = iframe.getAttribute('data-src');
+                    if (dataSrc && !iframe.getAttribute('src')) {
+                        console.log(`[MovieShows] Playing video: ${dataSrc}`);
+                        iframe.setAttribute('src', dataSrc);
+                    }
+                } else {
+                    // Unload src to stop playback
+                    if (iframe.getAttribute('src')) {
+                        console.log(`[MovieShows] Pausing video (out of view)`);
+                        iframe.setAttribute('src', '');
+                    }
+                }
+            });
+        }, {
+            threshold: 0.5 // 50% visible to play
+        });
+
+        // Observe existing
+        document.querySelectorAll('iframe.lazy-iframe').forEach(iframe => {
+            videoObserver.observe(iframe);
+        });
+    }
+
     function init() {
         if (initialized) return;
 
         console.log("[MovieShows] Initializing...");
 
         injectStyles();
+        setupVideoObserver(); // Add this line
+        setupIframeObserver();
         createPlayerSizeControl();
         createLayoutControl();
         setupCarouselInteractions();
