@@ -223,28 +223,43 @@
 
         const height = heights[size] || heights.large;
 
-        // Find all YouTube iframes and their containers
-        const iframes = document.querySelectorAll('iframe[src*="youtube"]');
+        // 1. Resize all iframes
+        const iframes = document.querySelectorAll('iframe');
         iframes.forEach((iframe) => {
             iframe.style.height = height;
             iframe.style.maxHeight = height;
+        });
 
-            // Also style parent containers
-            let parent = iframe.parentElement;
-            for (let i = 0; i < 5 && parent; i++) {
-                if (
-                    parent.className &&
-                    (parent.className.includes("group/player") ||
-                        (parent.className.includes("relative") &&
-                            parent.className.includes("w-full")))
-                ) {
-                    parent.style.height = height;
-                    parent.style.maxHeight = height;
-                    break;
+        // 2. Resize the main section container
+        // struct: section > div.group/player
+        const playerGroups = document.querySelectorAll('.group\\/player');
+        playerGroups.forEach(group => {
+            // Resize the group itself
+            group.style.height = height;
+
+            // Resize the parent section
+            const section = group.closest('section');
+            if (section) {
+                section.style.height = height;
+                section.style.maxHeight = height;
+                // Ensure z-index is correct for full screen
+                if (size === 'full') {
+                    section.style.zIndex = '50';
+                } else {
+                    section.style.removeProperty('z-index');
                 }
-                parent = parent.parentElement;
             }
         });
+
+        // 3. Fallback: Search for the section by class signature if group not found
+        if (playerGroups.length === 0) {
+            const sections = document.querySelectorAll('section');
+            sections.forEach(sec => {
+                if (sec.classList.contains('bg-black') && sec.classList.contains('z-10')) {
+                    sec.style.height = height;
+                }
+            });
+        }
     }
 
     function injectStyles() {
