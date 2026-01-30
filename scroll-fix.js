@@ -331,17 +331,20 @@
                     const recentSlides = videoSlides;
                     let index = -1;
 
-                    // First exact match
+                    // First exact match (Case insensitive)
                     index = recentSlides.findIndex(slide => {
                         const h2 = slide.querySelector('h2');
-                        return h2 && h2.textContent === title;
+                        return h2 && h2.textContent.toLowerCase().trim() === title.toLowerCase().trim();
                     });
 
-                    // If not found, fuzzy match
+                    // If not found, try VERY Strict inclusion (must contain full title)
                     if (index === -1) {
                         index = recentSlides.findIndex(slide => {
                             const h2 = slide.querySelector('h2');
-                            return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+                            // If title is "Scream 7", "Scream" should NOT match.
+                            // But if title is "Scream", "Scream 7" might be okay? No, let's be strict.
+                            // The carousel item is usually the "source of truth" for what user wants.
+                            return h2 && h2.textContent.toLowerCase() === title.toLowerCase();
                         });
                     }
 
