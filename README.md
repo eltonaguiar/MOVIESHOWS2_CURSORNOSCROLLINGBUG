@@ -1,7 +1,7 @@
 
 # MovieShows - Enhanced Video Streaming Platform
 
-[Live Demo](https://github.com/eltonaguiar/MOVIESHOWS2_CURSORNOSCROLLINGBUG/))
+[Live Demo](https://github.com/eltonaguiar/MOVIESHOWS2_CURSORNOSCROLLINGBUG/)
 
 ## Known Issues
 
