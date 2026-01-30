@@ -760,9 +760,9 @@
                 <!-- Right Action Buttons (Simplified) -->
                 <div class="absolute right-4 bottom-20 flex flex-col items-center gap-4 z-30 pointer-events-auto">
                     <button class="flex flex-col items-center gap-1 group">
-                        <div class="p-3 rounded-full bg-black/40 backdrop-blur-sm transition-all duration-200 group-hover:bg-black/60">
-                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart w-8 h-8 text-white"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"></path></svg>
-                        </div>
+                         <div class="p-3 rounded-full bg-black/40 backdrop-blur-sm transition-all duration-200 group-hover:bg-black/60">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart w-8 h-8 text-white"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>
+                         </div>
                         <span class="text-xs font-semibold drop-shadow-md text-white">Like</span>
                     </button>
                     <button class="flex flex-col items-center gap-1 group">
@@ -800,28 +800,43 @@
     }
 
     function addMovieToFeed(movie, scrollAfter = false) {
-        if (!scrollContainer) return;
+        if (!scrollContainer) {
+            console.error("[MovieShows] addMovieToFeed failed: No scrollContainer.");
+            scrollContainer = findScrollContainer(); // Try again
+            if (!scrollContainer) return;
+        }
+
+        console.log(`[MovieShows] Adding movie to feed: ${movie.title} (Scroll: ${scrollAfter})`);
 
         // Prevent strictly adjacent duplicates, but allow repeats eventually
         const lastSlide = videoSlides[videoSlides.length - 1];
         if (lastSlide) {
             const h2 = lastSlide.querySelector('h2');
-            if (h2 && h2.textContent === movie.title) return;
+            // Allow re-adding if forced (e.g. from carousel click)
+            if (!scrollAfter && h2 && h2.textContent === movie.title) {
+                console.log("[MovieShows] Skipped adding duplicate (adjacent)");
+                return;
+            }
         }
 
         const slide = createSlide(movie);
         scrollContainer.appendChild(slide);
-        videoSlides.push(slide);
+
+        // Refresh videoSlides list
+        videoSlides = findVideoSlides();
+
         updateUpNextCount();
 
         if (scrollAfter) {
-            // Wait for DOM to stabilize
-            requestAnimationFrame(() => {
+            // Force scroll
+            setTimeout(() => {
+                console.log(`[MovieShows] Scattering to index ${videoSlides.length - 1}`);
                 scrollToSlide(videoSlides.length - 1);
+
                 // Force player size application on new slide
                 const size = localStorage.getItem("movieshows-player-size") || "large";
                 applyPlayerSize(size);
-            });
+            }, 100);
         }
     }
 
