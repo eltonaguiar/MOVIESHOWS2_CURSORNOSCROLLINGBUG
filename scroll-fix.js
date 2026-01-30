@@ -41,28 +41,59 @@
 
     function findCarouselElement() {
         // Heuristic to find the bottom carousel
+        // Look for the "Hot Picks" section specifically
+        const headings = Array.from(document.querySelectorAll('h3'));
+        const hotPicksHeader = headings.find(h => h.textContent.includes('Hot Picks'));
+        if (hotPicksHeader) {
+            let p = hotPicksHeader.parentElement;
+            while (p && p.tagName !== 'BODY') {
+                const style = window.getComputedStyle(p);
+                // "absolute top-[85vh]..."
+                if ((style.position === 'absolute' || style.position === 'fixed') &&
+                    (style.top.includes('85vh') || p.classList.contains('top-[85vh]'))) {
+                    return p;
+                }
+                if (p.querySelector && p.querySelector('.overflow-x-auto')) {
+                    const wrapper = p.closest('section') || p.parentElement;
+                    return wrapper;
+                }
+                p = p.parentElement;
+            }
+        }
+
+        // Fallback: look for the specific top-[85vh] Class
+        const specific = document.querySelector('.top-\\[85vh\\]');
+        if (specific) return specific;
+
+        // Fallback heuristic
         const candidates = Array.from(document.querySelectorAll('div'));
         return candidates.find(el => {
             const style = window.getComputedStyle(el);
-            return (style.position === 'fixed' || style.position === 'absolute')
-                && style.bottom === '0px'
-                && el.offsetHeight < 300
-                && el.offsetHeight > 50
-                && el.querySelector('img');
+            return (style.position === 'absolute' && style.top.includes('85vh'));
         });
     }
 
     function updateCarouselVisibility() {
         const carousel = findCarouselElement();
-        if (!carousel) return;
+        if (!carousel) {
+            console.log("[MovieShows] Carousel NOT found");
+            return;
+        }
+
+        console.log("[MovieShows] Toggling carousel:", carousel);
 
         const shouldHide = document.body.classList.contains('carousel-hidden');
+        // Use display: none !important to force it
         if (shouldHide) {
-            carousel.style.opacity = '0';
-            carousel.style.pointerEvents = 'none';
+            carousel.style.setProperty('display', 'none', 'important');
         } else {
-            carousel.style.opacity = '1';
-            carousel.style.pointerEvents = 'all';
+            carousel.style.setProperty('display', 'block', 'important'); // Or original display? 
+            // Better to just remove the property if showing, but if we set none important we might need block important
+            // Try removing first
+            carousel.style.removeProperty('display');
+            if (window.getComputedStyle(carousel).display === 'none') {
+                carousel.style.setProperty('display', 'block', 'important');
+            }
         }
     }
 
@@ -308,28 +339,36 @@
 
       /* Layout Modes */
       
-      /* Raised: Pushes text up */
-      .text-layout-raised .snap-center h2.text-2xl,
-      .text-layout-raised .snap-center p.text-sm,
-      .text-layout-raised .snap-center .flex.flex-wrap {
-         transform: translateY(-25vh);
-         position: relative;
-         z-index: 50;
+      /* Raised: Lift the ENTIRE text container up */
+      /* We target the container that holds badges, title, and desc */
+      .text-layout-raised .snap-center > div.absolute.bottom-4.left-4 {
+         transform: translateY(-22vh) !important;
+         transition: transform 0.3s ease;
       }
 
-      /* Center: Centered in screen */
-      .text-layout-center .snap-center h2.text-2xl {
-         position: fixed;
-         top: 50%;
-         left: 50%;
-         transform: translate(-50%, -50%);
-         width: 100%;
+      /* Center: Centered in screen - heavily modified to look like a title card */
+      .text-layout-center .snap-center > div.absolute.bottom-4.left-4 {
+         bottom: 50% !important;
+         top: auto !important;
+         transform: translateY(50%) !important;
+         display: flex;
+         flex-direction: column;
+         align-items: center;
          text-align: center;
-         z-index: 100;
-         font-size: 5rem !important;
+         width: 100%;
+         left: 0 !important;
+         right: 0 !important;
+         background: transparent !important;
       }
-      .text-layout-center .snap-center p.text-sm,
-      .text-layout-center .snap-center .flex.flex-wrap {
+      .text-layout-center h2.text-2xl {
+         font-size: 5rem !important;
+         text-align: center;
+         text-shadow: 0 4px 8px rgba(0,0,0,0.8);
+      }
+      /* Hide description/badges in center mode, but keep title */
+      .text-layout-center p.text-sm,
+      .text-layout-center .flex.flex-wrap,
+      .text-layout-center .flex.items-center.gap-2 { 
          display: none !important;
       }
 
