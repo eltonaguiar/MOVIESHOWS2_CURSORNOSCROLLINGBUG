@@ -1,7 +1,8 @@
 
 # MovieShows - Enhanced Video Streaming Platform
 
-[Live Demo](https://eltonaguiar.github.io/MOVIESHOWS2_CURSOR/)
+[Live Demo](https://github.com/eltonaguiar/MOVIESHOWS2_CURSORNOSCROLLINGBUG/))
+
 ## Known Issues
 
 - **Scroll to next show**: Advancing to the next show in the queue does not always scroll the player into view as expected. This is a known bug and is being addressed.
