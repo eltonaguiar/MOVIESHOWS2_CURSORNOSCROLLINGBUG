@@ -1295,11 +1295,12 @@
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
+            // Wait for React Hydration to finish
             setupMutationObserver();
-            setTimeout(init, 2000);
+            setTimeout(init, 3000);
         });
     } else {
         setupMutationObserver();
-        setTimeout(init, 2000);
+        setTimeout(init, 3000);
     }
 })();
