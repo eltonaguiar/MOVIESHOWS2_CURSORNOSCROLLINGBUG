@@ -354,44 +354,94 @@
                         return;
                     }
 
-                    // 2. Load from DB
+                    // 2. Load from DB or Fallback
+                    let movie = null;
+
                     if (allMoviesData.length > 0) {
                         // Improved Fuzzy Match Strategy
                         const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
                         const targetSlug = normalize(title);
-                        const targetTokens = targetSlug.split(' ').filter(t => t.length > 2); // Only significant words
+                        const targetTokens = targetSlug.split(' ').filter(t => t.length > 2);
 
-                        let movie = allMoviesData.find(m => {
+                        movie = allMoviesData.find(m => {
                             const mTitle = normalize(m.title);
                             return mTitle.includes(targetSlug) || targetSlug.includes(mTitle);
                         });
 
-                        // Fallback: Token matching (if at least one significant word matches)
+                        // Fallback: Token matching
                         if (!movie && targetTokens.length > 0) {
                             movie = allMoviesData.find(m => {
                                 const mTitle = normalize(m.title);
-                                // Check if ANY significant token is in the title (and title is somewhat similar)
                                 return targetTokens.some(token => mTitle.includes(token));
                             });
                         }
+                    }
 
-                        if (movie) {
-                            console.log(`[MovieShows] Found in DB: "${movie.title}"`);
-                            showToast(`Playing: ${movie.title}`);
-                            addMovieToFeed(movie, true);
-                        } else {
-                            console.warn(`[MovieShows] Movie "${title}" not found in DB.`);
-                            showToast(`Could not find "${title}"`, true);
-                        }
-                    } else {
-                        console.warn("[MovieShows] Database not loaded yet.");
-                        showToast("Loading database...", true);
-                        loadMoviesData().then(() => {
-                            isProcessingCarouselClick = false;
-                            target.dispatchEvent(new Event('click'));
+                    // 3. Check hardcoded Fallback Data (for missing 2026 Hot Picks)
+                    if (!movie) {
+                        const fallbackMovies = [
+                            {
+                                title: "Scream 7",
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=UJrghaPJ0RY", // Official Teaser
+                                genres: ["Horror", "Mystery"],
+                                rating: "8.5"
+                            },
+                            {
+                                title: "Scream", // In case title is just Scream
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=UJrghaPJ0RY",
+                                genres: ["Horror", "Mystery"],
+                                rating: "8.5"
+                            },
+                            {
+                                title: "Avatar: Fire and Ash",
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=d9My665987w", // Avatar 2 as placeholder
+                                genres: ["Sci-Fi", "Action"],
+                                rating: "9.0"
+                            },
+                            {
+                                title: "The Batman Part II",
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=mqqft2x_Aa4", // The Batman
+                                genres: ["Action", "Crime"],
+                                rating: "8.8"
+                            },
+                            {
+                                title: "Shrek 5",
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=CwXOrWvPBPk", // Shrek placeholder
+                                genres: ["Animation", "Comedy"],
+                                rating: "8.0"
+                            },
+                            {
+                                title: "Toy Story 5",
+                                year: "2026",
+                                trailerUrl: "https://www.youtube.com/watch?v=wmiIUN-7qhE", // Toy Story 4
+                                genres: ["Animation", "Family"],
+                                rating: "8.2"
+                            }
+                        ];
+
+                        // Strict/Loose match on fallback
+                        const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+                        const targetSlug = normalize(title);
+                        movie = fallbackMovies.find(m => {
+                            const mTitle = normalize(m.title);
+                            return mTitle.includes(targetSlug) || targetSlug.includes(mTitle);
                         });
                     }
-                }, true); // Capture phase to beat others
+
+                    if (movie) {
+                        console.log(`[MovieShows] Found movie: "${movie.title}"`);
+                        showToast(`Playing: ${movie.title}`);
+                        addMovieToFeed(movie, true);
+                    } else {
+                        console.warn(`[MovieShows] Movie "${title}" not found in DB or Fallback.`);
+                        showToast(`Could not find "${title}"`, true);
+                    }
+                }, true); // Capture phase
             });
         });
 
