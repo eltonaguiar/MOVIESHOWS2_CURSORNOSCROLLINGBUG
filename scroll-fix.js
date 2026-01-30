@@ -39,6 +39,61 @@
         });
     }
 
+    function createLayoutControl() {
+        if (document.getElementById("layout-control")) return;
+
+        const control = document.createElement("div");
+        control.id = "layout-control";
+        control.style.marginTop = "4px";
+        control.innerHTML = `
+      <span style="color: #888; font-size: 11px; margin-right: 8px;">Text:</span>
+      <button data-layout="default" class="active">Def</button>
+      <button data-layout="raised">High</button>
+      <button data-layout="overlay">Over</button>
+      <button data-layout="compact">Mini</button>
+    `;
+
+        const container = document.getElementById("player-size-control");
+        if (container) {
+            // Append to existing control panel for a unified UI
+            container.style.flexDirection = "column";
+            container.style.gap = "4px";
+            container.style.alignItems = "center";
+            container.appendChild(control);
+        } else {
+            document.body.appendChild(control);
+        }
+
+        const savedLayout = localStorage.getItem("movieshows-text-layout") || "default";
+        setTextLayout(savedLayout);
+
+        control.querySelectorAll("button").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const layout = btn.dataset.layout;
+                setTextLayout(layout);
+                localStorage.setItem("movieshows-text-layout", layout);
+            });
+        });
+    }
+
+    function setTextLayout(layout) {
+        document.body.classList.remove(
+            "text-layout-default",
+            "text-layout-raised",
+            "text-layout-overlay",
+            "text-layout-compact"
+        );
+        document.body.classList.add(`text-layout-${layout}`);
+
+        const control = document.getElementById("layout-control");
+        if (control) {
+            control.querySelectorAll("button").forEach((btn) => {
+                btn.classList.toggle("active", btn.dataset.layout === layout);
+            });
+        }
+        console.log("[MovieShows] Text layout:", layout);
+    }
+
     function setPlayerSize(size) {
         document.body.classList.remove(
             "player-small",
@@ -50,7 +105,9 @@
 
         const control = document.getElementById("player-size-control");
         if (control) {
-            control.querySelectorAll("button").forEach((btn) => {
+            // Only toggle the size buttons, which are direct children of the container's top level (before we added the layout control) or we need to be specific
+            // Actually, we can just look for buttons with data-size
+            control.querySelectorAll("button[data-size]").forEach((btn) => {
                 btn.classList.toggle("active", btn.dataset.size === size);
             });
         }
@@ -184,6 +241,62 @@
       /* Ensure the info badges row is visible */
       [class*="flex"][class*="items-center"][class*="gap-2"]:has([class*="bg-yellow"]) {
         flex-wrap: wrap !important;
+      }
+
+      /* Layout Modes */
+      
+      /* Raised: Pushes text up to clear the bottom carousel */
+      .text-layout-raised .snap-center h2.text-2xl,
+      .text-layout-raised .snap-center p.text-sm,
+      .text-layout-raised .snap-center .flex.flex-wrap {
+         transform: translateY(-20vh);
+         position: relative;
+         z-index: 50;
+      }
+
+      /* Overlay: Text sits on top of video, bottom aligned */
+      .text-layout-overlay .snap-center [class*="absolute"][class*="bottom"] {
+         bottom: 150px !important; /* Clear the carousel */
+         background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
+         padding: 20px;
+         border-radius: 8px;
+         max-width: 90%;
+      }
+
+      /* Compact: Smaller text for tight spaces */
+      .text-layout-compact h2.text-2xl {
+         font-size: 1.5rem !important;
+         margin-bottom: 0.2rem !important;
+      }
+      .text-layout-compact p.text-sm {
+         font-size: 0.9rem !important;
+         max-width: 100% !important;
+         display: -webkit-box;
+         -webkit-line-clamp: 2;
+         -webkit-box-orient: vertical;
+         overflow: hidden;
+      }
+      
+      /* Additional UI Styling for the new control */
+      #layout-control button {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #aaa;
+        padding: 3px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: bold;
+        transition: all 0.2s;
+      }
+      #layout-control button:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+      #layout-control button.active {
+        background: #3b82f6; /* Blue for layout */
+        border-color: #3b82f6;
+        color: white;
       }
 
       /* Player size CSS classes as backup */
@@ -475,6 +588,7 @@
 
         injectStyles();
         createPlayerSizeControl();
+        createLayoutControl();
 
         scrollContainer = findScrollContainer();
         if (!scrollContainer) {
