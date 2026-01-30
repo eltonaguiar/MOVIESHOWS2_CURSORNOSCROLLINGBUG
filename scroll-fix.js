@@ -110,20 +110,27 @@
           <button data-layout="raised">High</button>
           <button data-layout="center">Mid</button>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+      <div style="display: flex; align-items: center; justify-content:space-between; gap: 2px; margin-bottom: 4px;">
           <div style="display:flex; align-items:center; gap:2px;">
-             <span style="color: #888; font-size: 11px;">Adj:</span>
+             <span style="color: #888; font-size: 11px;">Y:</span>
              <button id="adj-up" style="padding: 2px 6px;">▲</button>
              <button id="adj-down" style="padding: 2px 6px;">▼</button>
-             <span id="adj-val" style="color: #fff; font-size: 10px; min-width: 25px; text-align: center;">0</span>
+             <span id="adj-val-y" style="color: #fff; font-size: 10px; min-width: 25px; text-align: center;">0</span>
           </div>
-          <button data-action="toggle-carousel" class="active" style="flex:1;">Bar: Show</button>
+          <div style="display:flex; align-items:center; gap:2px;">
+             <span style="color: #888; font-size: 11px;">X:</span>
+             <button id="adj-left" style="padding: 2px 6px;">◄</button>
+             <button id="adj-right" style="padding: 2px 6px;">►</button>
+             <span id="adj-val-x" style="color: #fff; font-size: 10px; min-width: 25px; text-align: center;">0</span>
+          </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <button data-action="toggle-carousel" class="active" style="width:100%;">Bar: Show</button>
       </div>
       <div style="display: flex; align-items: center; gap: 4px;">
           <span style="color: #888; font-size: 11px; margin-right: 2px;">Dtl:</span>
           <button data-detail="full" class="active">Full</button>
           <button data-detail="title">Title</button>
-      </div>
     `;
 
         const container = document.getElementById("player-size-control");
@@ -163,16 +170,20 @@
             });
 
             // Manual Adjustment
-            let currentOffset = 0;
-            const updateOffset = (delta) => {
-                currentOffset += delta;
-                document.documentElement.style.setProperty('--text-offset', `${currentOffset}px`);
-                document.getElementById('adj-val').textContent = currentOffset;
-                console.log(`[MovieShows] Text offset adjusted to: ${currentOffset}px`);
+            let currentOffsetY = 0;
+            let currentOffsetX = 0;
+
+            const updateOffset = () => {
+                document.documentElement.style.setProperty('--text-offset-y', `${currentOffsetY}px`);
+                document.documentElement.style.setProperty('--text-offset-x', `${currentOffsetX}px`);
+                document.getElementById('adj-val-y').textContent = currentOffsetY;
+                document.getElementById('adj-val-x').textContent = currentOffsetX;
             };
 
-            document.getElementById('adj-up').addEventListener('click', () => updateOffset(10));
-            document.getElementById('adj-down').addEventListener('click', () => updateOffset(-10));
+            document.getElementById('adj-up').addEventListener('click', () => { currentOffsetY += 10; updateOffset(); });
+            document.getElementById('adj-down').addEventListener('click', () => { currentOffsetY -= 10; updateOffset(); });
+            document.getElementById('adj-left').addEventListener('click', () => { currentOffsetX -= 10; updateOffset(); });
+            document.getElementById('adj-right').addEventListener('click', () => { currentOffsetX += 10; updateOffset(); });
         } else {
             document.body.appendChild(control);
         }
@@ -282,6 +293,41 @@
         }
     }
 
+    function setupCarouselInteractions() {
+        const observer = new MutationObserver(() => {
+            const carousel = findCarouselElement();
+            if (!carousel) return;
+
+            const items = carousel.querySelectorAll('img:not([data-click-handled])');
+            items.forEach(img => {
+                img.setAttribute('data-click-handled', 'true');
+                const container = img.closest('div.cursor-pointer') || img.parentElement;
+
+                if (container) {
+                    container.style.pointerEvents = "auto";
+                    container.addEventListener('click', (e) => {
+                        const title = img.alt;
+                        if (title) {
+                            const index = videoSlides.findIndex(slide => {
+                                const h2 = slide.querySelector('h2');
+                                return h2 && h2.textContent.trim().toLowerCase().includes(title.toLowerCase());
+                            });
+
+                            if (index !== -1) {
+                                console.log(`[MovieShows] Found movie "${title}" at index ${index}. Jumping...`);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                scrollToSlide(index);
+                            }
+                        }
+                    }, true);
+                }
+            });
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
     function injectStyles() {
         if (document.getElementById("movieshows-custom-styles")) return;
 
@@ -356,13 +402,10 @@
       }
       
       /* Text Container Interaction Fix */
-      /* Make the container transparent to clicks so carousel below works */
       .snap-center > div.absolute.bottom-4.left-4 {
-          pointer-events: none;
-      }
-      /* But children need events */
-      .snap-center > div.absolute.bottom-4.left-4 > * {
-          pointer-events: auto;
+          pointer-events: auto; /* Allow interaction so wheel events bubble to document */
+          transform: translate(var(--text-offset-x), var(--text-offset-y)) !important; 
+          transition: transform 0.1s ease-out, bottom 0.3s ease;
       }
 
       /* Detail Modes */
@@ -408,7 +451,8 @@
       .text-layout-center .snap-center > div.absolute.bottom-4.left-4 {
          bottom: 50% !important;
          top: auto !important;
-         transform: translateY(50%) !important;
+         /* Include offsets in calculation: x, y */
+         transform: translate(var(--text-offset-x), calc(50% + var(--text-offset-y))) !important;
          display: flex;
          flex-direction: column;
          align-items: center;
@@ -417,7 +461,7 @@
          left: 0 !important;
          right: 0 !important;
          background: transparent !important;
-         pointer-events: none;
+         /* pointer-events: auto by default now */
       }
       .text-layout-center h2.text-2xl {
          font-size: 5rem !important;
