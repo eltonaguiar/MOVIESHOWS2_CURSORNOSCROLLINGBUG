@@ -39,41 +39,105 @@
         });
     }
 
+    function findCarouselElement() {
+        // Heuristic to find the bottom carousel
+        const candidates = Array.from(document.querySelectorAll('div'));
+        return candidates.find(el => {
+            const style = window.getComputedStyle(el);
+            return (style.position === 'fixed' || style.position === 'absolute')
+                && style.bottom === '0px'
+                && el.offsetHeight < 300
+                && el.offsetHeight > 50
+                && el.querySelector('img');
+        });
+    }
+
+    function updateCarouselVisibility() {
+        const carousel = findCarouselElement();
+        if (!carousel) return;
+
+        const shouldHide = document.body.classList.contains('carousel-hidden');
+        if (shouldHide) {
+            carousel.style.opacity = '0';
+            carousel.style.pointerEvents = 'none';
+        } else {
+            carousel.style.opacity = '1';
+            carousel.style.pointerEvents = 'all';
+        }
+    }
+
     function createLayoutControl() {
         if (document.getElementById("layout-control")) return;
 
         const control = document.createElement("div");
         control.id = "layout-control";
         control.style.marginTop = "4px";
+        control.style.display = "flex";
+        control.style.flexDirection = "column";
+        control.style.gap = "4px";
         control.innerHTML = `
-      <span style="color: #888; font-size: 11px; margin-right: 8px;">Text:</span>
-      <button data-layout="default" class="active">Def</button>
-      <button data-layout="raised">High</button>
-      <button data-layout="overlay">Over</button>
-      <button data-layout="compact">Mini</button>
+      <div style="display:flex; align-items:center; gap:4px">
+          <span style="color: #888; font-size: 11px; width: 30px;">Bar:</span>
+          <button data-action="toggle-carousel" class="active">Show</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px">
+          <span style="color: #888; font-size: 11px; width: 30px;">Pos:</span>
+          <button data-layout="default" class="active">Def</button>
+          <button data-layout="raised">High</button>
+          <button data-layout="center">Mid</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px">
+          <span style="color: #888; font-size: 11px; width: 30px;">Txt:</span>
+          <button data-detail="full" class="active">Full</button>
+          <button data-detail="title">Title</button>
+      </div>
     `;
 
         const container = document.getElementById("player-size-control");
         if (container) {
-            // Append to existing control panel for a unified UI
             container.style.flexDirection = "column";
-            container.style.gap = "4px";
-            container.style.alignItems = "center";
+            container.style.gap = "8px";
+            container.style.alignItems = "stretch";
             container.appendChild(control);
         } else {
             document.body.appendChild(control);
         }
 
+        // Carousel Toggle Logic
+        const carouselBtn = control.querySelector('[data-action="toggle-carousel"]');
+        carouselBtn.addEventListener('click', () => {
+            document.body.classList.toggle('carousel-hidden');
+            const isHidden = document.body.classList.contains('carousel-hidden');
+            carouselBtn.textContent = isHidden ? 'Hide' : 'Show';
+            carouselBtn.classList.toggle('active', !isHidden);
+            updateCarouselVisibility();
+        });
+
+        // Layout (Pos) Logic
         const savedLayout = localStorage.getItem("movieshows-text-layout") || "default";
         setTextLayout(savedLayout);
 
-        control.querySelectorAll("button").forEach((btn) => {
+        control.querySelectorAll("button[data-layout]").forEach((btn) => {
             btn.addEventListener("click", () => {
                 const layout = btn.dataset.layout;
                 setTextLayout(layout);
                 localStorage.setItem("movieshows-text-layout", layout);
             });
         });
+
+        // Detail (Txt) Logic
+        control.querySelectorAll("button[data-detail]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const mode = btn.dataset.detail;
+                document.body.classList.remove('detail-full', 'detail-title');
+                document.body.classList.add(`detail-${mode}`);
+
+                control.querySelectorAll("button[data-detail]").forEach(b =>
+                    b.classList.toggle('active', b.dataset.detail === mode)
+                );
+            });
+        });
+        document.body.classList.add('detail-full');
     }
 
     function setTextLayout(layout) {
@@ -169,37 +233,39 @@
         align-items: center;
         gap: 6px;
         background: rgba(0, 0, 0, 0.9);
-        padding: 6px 14px;
-        border-radius: 20px;
+        padding: 8px 16px;
+        border-radius: 12px;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.15);
+        font-family: sans-serif;
       }
-
-      #player-size-control button {
+      
+      #layout-control button, #player-size-control button {
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: #aaa;
         padding: 4px 10px;
-        border-radius: 10px;
+        border-radius: 6px;
         cursor: pointer;
         font-size: 11px;
         font-weight: bold;
         transition: all 0.2s;
+        flex: 1;
+        text-align: center;
       }
 
-      #player-size-control button:hover {
+      #layout-control button:hover, #player-size-control button:hover {
         background: rgba(255, 255, 255, 0.2);
         color: white;
       }
 
-      #player-size-control button.active {
+      #layout-control button.active, #player-size-control button.active {
         background: #22c55e;
         border-color: #22c55e;
         color: black;
       }
 
       /* Fix title and description visibility */
-      /* The title section that shows "Melania" etc */
       h2.text-2xl {
         display: block !important;
         visibility: visible !important;
@@ -208,26 +274,28 @@
         line-height: 1.1 !important;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
         margin-bottom: 0.5rem !important;
+        transition: transform 0.3s ease;
       }
       
-      /* Description text */
       p.text-sm {
         font-size: 1.25rem !important;
         line-height: 1.5 !important;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
         max-width: 80% !important;
+        transition: opacity 0.3s ease;
       }
       
-      /* Meta badges */
-      .flex.flex-wrap.gap-2.mt-2 span {
-        font-size: 0.9rem !important;
-        padding: 4px 12px !important;
+      /* Detail Modes */
+      body.detail-title p.text-sm {
+        display: none !important;
+      }
+      body.detail-title .flex.flex-wrap {
+        display: none !important;
       }
 
       /* Ensure the bottom info section is fully visible */
       .snap-center [class*="bottom-4"][class*="left-4"] {
         left: 16px !important;
-        /* Removed tight constraints to prevent name cutoff */
       }
 
       /* Make sure text isn't clipped */
@@ -238,87 +306,38 @@
         overflow: visible !important;
       }
 
-      /* Ensure the info badges row is visible */
-      [class*="flex"][class*="items-center"][class*="gap-2"]:has([class*="bg-yellow"]) {
-        flex-wrap: wrap !important;
-      }
-
       /* Layout Modes */
       
-      /* Raised: Pushes text up to clear the bottom carousel */
+      /* Raised: Pushes text up */
       .text-layout-raised .snap-center h2.text-2xl,
       .text-layout-raised .snap-center p.text-sm,
       .text-layout-raised .snap-center .flex.flex-wrap {
-         transform: translateY(-20vh);
+         transform: translateY(-25vh);
          position: relative;
          z-index: 50;
       }
 
-      /* Overlay: Text sits on top of video, bottom aligned */
-      .text-layout-overlay .snap-center [class*="absolute"][class*="bottom"] {
-         bottom: 150px !important; /* Clear the carousel */
-         background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
-         padding: 20px;
-         border-radius: 8px;
-         max-width: 90%;
+      /* Center: Centered in screen */
+      .text-layout-center .snap-center h2.text-2xl {
+         position: fixed;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         width: 100%;
+         text-align: center;
+         z-index: 100;
+         font-size: 5rem !important;
+      }
+      .text-layout-center .snap-center p.text-sm,
+      .text-layout-center .snap-center .flex.flex-wrap {
+         display: none !important;
       }
 
-      /* Compact: Smaller text for tight spaces */
-      .text-layout-compact h2.text-2xl {
-         font-size: 1.5rem !important;
-         margin-bottom: 0.2rem !important;
-      }
-      .text-layout-compact p.text-sm {
-         font-size: 0.9rem !important;
-         max-width: 100% !important;
-         display: -webkit-box;
-         -webkit-line-clamp: 2;
-         -webkit-box-orient: vertical;
-         overflow: hidden;
-      }
-      
-      /* Additional UI Styling for the new control */
-      #layout-control button {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: #aaa;
-        padding: 3px 8px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 10px;
-        font-weight: bold;
-        transition: all 0.2s;
-      }
-      #layout-control button:hover {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-      }
-      #layout-control button.active {
-        background: #3b82f6; /* Blue for layout */
-        border-color: #3b82f6;
-        color: white;
-      }
-
-      /* Player size CSS classes as backup */
-      .player-small iframe[src*="youtube"] {
-        height: 40vh !important;
-        max-height: 40vh !important;
-      }
-
-      .player-medium iframe[src*="youtube"] {
-        height: 60vh !important;
-        max-height: 60vh !important;
-      }
-
-      .player-large iframe[src*="youtube"] {
-        height: 85vh !important;
-        max-height: 85vh !important;
-      }
-
-      .player-full iframe[src*="youtube"] {
-        height: 100vh !important;
-        max-height: 100vh !important;
-      }
+      /* Player size CSS classes */
+      .player-small iframe[src*="youtube"] { height: 40vh !important; max-height: 40vh !important; }
+      .player-medium iframe[src*="youtube"] { height: 60vh !important; max-height: 60vh !important; }
+      .player-large iframe[src*="youtube"] { height: 85vh !important; max-height: 85vh !important; }
+      .player-full iframe[src*="youtube"] { height: 100vh !important; max-height: 100vh !important; }
     `;
 
         document.head.appendChild(style);
