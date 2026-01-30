@@ -262,12 +262,23 @@
         }
     }
 
+    function fixCarouselZIndex() {
+        // Use the existing finder logic
+        const carousel = findCarouselElement();
+        if (carousel) {
+            carousel.style.zIndex = "1000"; // Ensure it's above everything including the player
+            // If it's fixed or absolute, z-index will work
+        }
+    }
+
     function injectStyles() {
         if (document.getElementById("movieshows-custom-styles")) return;
 
         const style = document.createElement("style");
         style.id = "movieshows-custom-styles";
         style.textContent = `
+      /* ... (previous styles) ... */
+      
       /* Player size control */
       #player-size-control {
         position: fixed;
@@ -321,6 +332,7 @@
         text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
         margin-bottom: 0.5rem !important;
         transition: transform 0.3s ease;
+        pointer-events: auto; /* Allow text selection/interaction */
       }
       
       p.text-sm {
@@ -329,8 +341,19 @@
         text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
         max-width: 80% !important;
         transition: opacity 0.3s ease;
+        pointer-events: auto;
       }
       
+      /* Text Container Interaction Fix */
+      /* Make the container transparent to clicks so carousel below works */
+      .snap-center > div.absolute.bottom-4.left-4 {
+          pointer-events: none;
+      }
+      /* But children need events */
+      .snap-center > div.absolute.bottom-4.left-4 > * {
+          pointer-events: auto;
+      }
+
       /* Detail Modes */
       body.detail-title p.text-sm {
         display: none !important;
@@ -343,7 +366,15 @@
       .snap-center [class*="bottom-4"][class*="left-4"] {
         left: 16px !important;
       }
-
+      
+      /* AUTOMATIC POSITION ADJUSTMENT FOR SIZES (Default "Def" position) */
+      .player-medium .snap-center > div.absolute.bottom-4.left-4 {
+          bottom: 15vh !important;
+      }
+      .player-large .snap-center > div.absolute.bottom-4.left-4 {
+          bottom: 22vh !important;
+      }
+      
       /* Make sure text isn't clipped */
       [class*="line-clamp"] {
         -webkit-line-clamp: 4 !important;
@@ -354,11 +385,12 @@
 
       /* Layout Modes */
       
-      /* Raised: Lift the ENTIRE text container up */
-      /* We target the container that holds badges, title, and desc */
+      /* Raised: Lift the ENTIRE text container up explicitly */
+      /* Redefine Raised to be a specific high position */
       .text-layout-raised .snap-center > div.absolute.bottom-4.left-4 {
-         transform: translateY(-22vh) !important;
-         transition: transform 0.3s ease;
+         bottom: 35vh !important; /* Definitive high position */
+         transform: none !important;
+         transition: bottom 0.3s ease;
       }
 
       /* Center: Centered in screen - heavily modified to look like a title card */
@@ -374,6 +406,7 @@
          left: 0 !important;
          right: 0 !important;
          background: transparent !important;
+         pointer-events: none;
       }
       .text-layout-center h2.text-2xl {
          font-size: 5rem !important;
@@ -393,8 +426,11 @@
       .player-large iframe[src*="youtube"] { height: 85vh !important; max-height: 85vh !important; }
       .player-full iframe[src*="youtube"] { height: 100vh !important; max-height: 100vh !important; }
     `;
-
         document.head.appendChild(style);
+
+        // Also apply z-index fix immediately
+        fixCarouselZIndex();
+        setInterval(fixCarouselZIndex, 2000); // Polling checks
     }
 
     // ========== SCROLL NAVIGATION ==========
