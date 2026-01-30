@@ -103,22 +103,24 @@
         const control = document.createElement("div");
         control.id = "layout-control";
         control.style.marginTop = "4px";
-        control.style.display = "flex";
-        control.style.flexDirection = "column";
-        control.style.gap = "4px";
         control.innerHTML = `
-      <div style="display:flex; align-items:center; gap:4px">
-          <span style="color: #888; font-size: 11px; width: 30px;">Bar:</span>
-          <button data-action="toggle-carousel" class="active">Show</button>
-      </div>
-      <div style="display:flex; align-items:center; gap:4px">
-          <span style="color: #888; font-size: 11px; width: 30px;">Pos:</span>
+      <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+          <span style="color: #888; font-size: 11px; margin-right: 2px;">Txt:</span>
           <button data-layout="default" class="active">Def</button>
           <button data-layout="raised">High</button>
           <button data-layout="center">Mid</button>
       </div>
-      <div style="display:flex; align-items:center; gap:4px">
-          <span style="color: #888; font-size: 11px; width: 30px;">Txt:</span>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <div style="display:flex; align-items:center; gap:2px;">
+             <span style="color: #888; font-size: 11px;">Adj:</span>
+             <button id="adj-up" style="padding: 2px 6px;">▲</button>
+             <button id="adj-down" style="padding: 2px 6px;">▼</button>
+             <span id="adj-val" style="color: #fff; font-size: 10px; min-width: 25px; text-align: center;">0</span>
+          </div>
+          <button data-action="toggle-carousel" class="active" style="flex:1;">Bar: Show</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="color: #888; font-size: 11px; margin-right: 2px;">Dtl:</span>
           <button data-detail="full" class="active">Full</button>
           <button data-detail="title">Title</button>
       </div>
@@ -126,49 +128,58 @@
 
         const container = document.getElementById("player-size-control");
         if (container) {
-            container.style.flexDirection = "column";
-            container.style.gap = "8px";
-            container.style.alignItems = "stretch";
             container.appendChild(control);
+
+            // Layout Mode
+            const layoutBtns = control.querySelectorAll('button[data-layout]');
+            layoutBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    layoutBtns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    setTextLayout(e.target.dataset.layout);
+                });
+            });
+
+            // Detail Mode
+            const detailBtns = control.querySelectorAll('button[data-detail]');
+            detailBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    detailBtns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    const mode = e.target.dataset.detail;
+                    document.body.classList.remove('detail-full', 'detail-title');
+                    document.body.classList.add(`detail-${mode}`);
+                });
+            });
+
+            // Carousel Toggle
+            const carouselBtn = control.querySelector('[data-action="toggle-carousel"]');
+            carouselBtn.addEventListener('click', () => {
+                document.body.classList.toggle('carousel-hidden');
+                const isHidden = document.body.classList.contains('carousel-hidden');
+                carouselBtn.textContent = isHidden ? 'Bar: Hide' : 'Bar: Show';
+                carouselBtn.classList.toggle('active', !isHidden);
+                updateCarouselVisibility();
+            });
+
+            // Manual Adjustment
+            let currentOffset = 0;
+            const updateOffset = (delta) => {
+                currentOffset += delta;
+                document.documentElement.style.setProperty('--text-offset', `${currentOffset}px`);
+                document.getElementById('adj-val').textContent = currentOffset;
+                console.log(`[MovieShows] Text offset adjusted to: ${currentOffset}px`);
+            };
+
+            document.getElementById('adj-up').addEventListener('click', () => updateOffset(10));
+            document.getElementById('adj-down').addEventListener('click', () => updateOffset(-10));
         } else {
             document.body.appendChild(control);
         }
 
-        // Carousel Toggle Logic
-        const carouselBtn = control.querySelector('[data-action="toggle-carousel"]');
-        carouselBtn.addEventListener('click', () => {
-            document.body.classList.toggle('carousel-hidden');
-            const isHidden = document.body.classList.contains('carousel-hidden');
-            carouselBtn.textContent = isHidden ? 'Hide' : 'Show';
-            carouselBtn.classList.toggle('active', !isHidden);
-            updateCarouselVisibility();
-        });
-
-        // Layout (Pos) Logic
+        // Initialize saved layout
         const savedLayout = localStorage.getItem("movieshows-text-layout") || "default";
         setTextLayout(savedLayout);
-
-        control.querySelectorAll("button[data-layout]").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const layout = btn.dataset.layout;
-                setTextLayout(layout);
-                localStorage.setItem("movieshows-text-layout", layout);
-            });
-        });
-
-        // Detail (Txt) Logic
-        control.querySelectorAll("button[data-detail]").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const mode = btn.dataset.detail;
-                document.body.classList.remove('detail-full', 'detail-title');
-                document.body.classList.add(`detail-${mode}`);
-
-                control.querySelectorAll("button[data-detail]").forEach(b =>
-                    b.classList.toggle('active', b.dataset.detail === mode)
-                );
-            });
-        });
-        document.body.classList.add('detail-full');
     }
 
     function setTextLayout(layout) {
@@ -698,6 +709,7 @@
         injectStyles();
         createPlayerSizeControl();
         createLayoutControl();
+        setupCarouselInteractions();
 
         scrollContainer = findScrollContainer();
         if (!scrollContainer) {
