@@ -527,27 +527,36 @@
 
     async function loadMoviesData() {
         if (allMoviesData.length > 0) return;
-        try {
-            console.log("[MovieShows] Fetching movie data...");
-            // Try primary then fallback
-            let res = await fetch('movies-database-2026-01-30.json');
-            if (!res.ok) res = await fetch('movies-database.json'); // Fallback
 
-            if (res.ok) {
+        const sources = [
+            'movies-database-2026-01-30.json',
+            'movies-database.json'
+        ];
+
+        for (const source of sources) {
+            try {
+                const res = await fetch(source);
+                if (!res.ok) continue; // Try next if 404
+
                 const data = await res.json();
-                allMoviesData = data.items || data.movies || [];
-                console.log(`[MovieShows] Loaded ${allMoviesData.length} movies/shows.`);
+                const items = data.items || data.movies || [];
 
-                // Hack: Populate to 20 immediately
-                ensureMinimumCount(20);
-
-                updateUpNextCount();
-            } else {
-                console.error("[MovieShows] Could not load any movie database.");
+                if (items.length > 5) { // Basic validation: must have some items
+                    allMoviesData = items;
+                    console.log(`[MovieShows] Successfully loaded ${items.length} items from ${source}`);
+                    ensureMinimumCount(20);
+                    updateUpNextCount();
+                    checkInfiniteScroll();
+                    return; // Stop after first success
+                } else {
+                    console.warn(`[MovieShows] Source ${source} had too few items (${items.length}). Ignoring.`);
+                }
+            } catch (e) {
+                console.warn(`[MovieShows] Failed to parse ${source}:`, e);
             }
-        } catch (e) {
-            console.error("[MovieShows] Failed to load movie data", e);
         }
+
+        console.error("[MovieShows] Critical: Failed to load any valid movie database.");
     }
 
     function ensureMinimumCount(min) {
@@ -555,15 +564,23 @@
             const needed = min - videoSlides.length;
             console.log(`[MovieShows] Pre-filling feed with ${needed} more shows...`);
 
-            // Get current titles to avoid dupe blocks
+            // Get current titles
             const existingTitles = videoSlides.map(s => s.querySelector('h2')?.textContent || "");
 
-            const candidates = allMoviesData
-                .filter(m => !existingTitles.includes(m.title))
+            // Filter candidates
+            let candidates = allMoviesData.filter(m => !existingTitles.includes(m.title));
+
+            // If we ran out of unique content, allow duplicates (but shuffle)
+            if (candidates.length < needed) {
+                console.log("[MovieShows] Running low on unique content, recycling...");
+                candidates = [...allMoviesData].sort(() => 0.5 - Math.random());
+            }
+
+            const toAdd = candidates
                 .sort(() => 0.5 - Math.random())
                 .slice(0, needed);
 
-            candidates.forEach(m => addMovieToFeed(m, false)); // No scroll, just append
+            toAdd.forEach(m => addMovieToFeed(m, false));
         }
     }
 
