@@ -528,35 +528,35 @@
     async function loadMoviesData() {
         if (allMoviesData.length > 0) return;
 
-        const sources = [
-            'movies-database-2026-01-30.json',
-            'movies-database.json'
-        ];
+        // ONLY use the stable large database, with cache busting
+        const source = 'movies-database.json?v=' + new Date().getTime();
 
-        for (const source of sources) {
-            try {
-                const res = await fetch(source);
-                if (!res.ok) continue; // Try next if 404
+        try {
+            console.log(`[MovieShows] Attempting to load: ${source}`);
+            const res = await fetch(source);
 
+            if (res.ok) {
                 const data = await res.json();
-                const items = data.items || data.movies || [];
+                // Handle different possible structures
+                const items = data.items || data.movies || data;
 
-                if (items.length > 5) { // Basic validation: must have some items
+                if (Array.isArray(items) && items.length > 0) {
                     allMoviesData = items;
-                    console.log(`[MovieShows] Successfully loaded ${items.length} items from ${source}`);
+                    console.log(`[MovieShows] SUCCESS: Loaded ${items.length} items.`);
+
+                    // Immediately hydrate the UI
                     ensureMinimumCount(20);
                     updateUpNextCount();
                     checkInfiniteScroll();
-                    return; // Stop after first success
                 } else {
-                    console.warn(`[MovieShows] Source ${source} had too few items (${items.length}). Ignoring.`);
+                    console.error(`[MovieShows] Data loaded but format incorrect or empty:`, data);
                 }
-            } catch (e) {
-                console.warn(`[MovieShows] Failed to parse ${source}:`, e);
+            } else {
+                console.error(`[MovieShows] HTTP Error loading data: ${res.status}`);
             }
+        } catch (e) {
+            console.error(`[MovieShows] CRITICAL FETCH ERROR:`, e);
         }
-
-        console.error("[MovieShows] Critical: Failed to load any valid movie database.");
     }
 
     function ensureMinimumCount(min) {
