@@ -836,6 +836,13 @@
                 // Force player size application on new slide
                 const size = localStorage.getItem("movieshows-player-size") || "large";
                 applyPlayerSize(size);
+
+                // FORCE PLAY: bypass observer delay
+                const iframe = slide.querySelector('iframe');
+                if (iframe && iframe.dataset.src) {
+                    console.log("[MovieShows] Force playing video...");
+                    iframe.src = iframe.dataset.src;
+                }
             }, 100);
         }
     }
