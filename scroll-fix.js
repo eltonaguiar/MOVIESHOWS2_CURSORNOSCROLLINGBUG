@@ -293,6 +293,8 @@
         }
     }
 
+    let isProcessingCarouselClick = false;
+
     function setupCarouselInteractions() {
         const observer = new MutationObserver(() => {
             const carousel = findCarouselElement();
@@ -316,19 +318,35 @@
                     e.stopPropagation();
                     e.stopImmediatePropagation();
 
+                    if (isProcessingCarouselClick) return;
+                    isProcessingCarouselClick = true;
+                    setTimeout(() => { isProcessingCarouselClick = false; }, 1000);
+
                     const title = img.alt || img.title;
                     console.log(`[MovieShows] Clicked carousel item: "${title}"`);
                     if (!title) return;
 
-                    // 1. Check if already in feed (Video Slides)
-                    let index = videoSlides.findIndex(slide => {
+                    // 1. Check if already properly loaded in feed (Video Slides)
+                    // We check the LAST 50 slides to save perf but cover most use cases
+                    const recentSlides = videoSlides;
+                    let index = -1;
+
+                    // First exact match
+                    index = recentSlides.findIndex(slide => {
                         const h2 = slide.querySelector('h2');
-                        // Extremely loose matching
-                        return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+                        return h2 && h2.textContent === title;
                     });
 
+                    // If not found, fuzzy match
+                    if (index === -1) {
+                        index = recentSlides.findIndex(slide => {
+                            const h2 = slide.querySelector('h2');
+                            return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+                        });
+                    }
+
                     if (index !== -1) {
-                        console.log(`[MovieShows] Found in feed at index ${index} ("${videoSlides[index].querySelector('h2').textContent}"). Jumping...`);
+                        console.log(`[MovieShows] Found in feed at index ${index}. Jumping...`);
                         scrollToSlide(index);
                         return;
                     }
@@ -352,7 +370,12 @@
                         }
                     } else {
                         console.warn("[MovieShows] Database not loaded yet.");
-                        loadMoviesData().then(() => target.click()); // Retry once
+                        loadMoviesData().then(() => {
+                            // Don't click again recursively, just retry the logic manually
+                            // to avoid infinite loops
+                            isProcessingCarouselClick = false; // Reset lock to allow retry
+                            target.dispatchEvent(new Event('click'));
+                        });
                     }
                 }, true); // Capture phase to beat others
             });
@@ -698,6 +721,42 @@
         }
     }
 
+    function injectQueueCloseButton(headerEl) {
+        if (headerEl.querySelector('.custom-queue-close')) return;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '✕';
+        closeBtn.className = 'custom-queue-close';
+        closeBtn.title = "Close Queue";
+        closeBtn.style.cssText = "margin-left: auto; background: #ef4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; border: none; cursor: pointer; pointer-events: auto; z-index: 9999;";
+
+        closeBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("[MovieShows] Closing queue...");
+
+            // 1. Try finding the React close button (usually 'x' SVG)
+            const panel = headerEl.closest('div.fixed') || headerEl.parentElement.parentElement;
+            if (panel) {
+                const buttons = panel.querySelectorAll('button');
+                const nativeClose = Array.from(buttons).find(b => b.textContent.includes('✕') || b.querySelector('svg') || b.getAttribute('aria-label') === 'Close menu');
+                if (nativeClose && nativeClose !== closeBtn) {
+                    nativeClose.click();
+                    return;
+                }
+                // If no native close, just hide the panel
+                panel.style.display = 'none';
+            }
+        };
+
+        headerEl.style.display = 'flex';
+        headerEl.style.alignItems = 'center';
+        headerEl.style.justifyContent = 'space-between';
+
+        // Ensure the header text is wrapped if needed, but usually we can just append
+        headerEl.appendChild(closeBtn);
+    }
+
     function updateUpNextCount() {
         // Update the green button
         const spans = Array.from(document.querySelectorAll('span'));
@@ -705,25 +764,25 @@
         if (upNextSpan) {
             const count = Math.max(20, allMoviesData.length - videoSlides.length + 20);
             upNextSpan.textContent = `${count}+ Up Next - Infinite`;
-            // Also update parent button to green just in case
             if (upNextSpan.parentElement) upNextSpan.parentElement.style.background = "#22c55e";
         }
 
         // Try to update the "Queue (10)" text in the side panel header if visible
-        const queueHeader = document.querySelector('h2.text-xl .text-amber-400') ||
-            Array.from(document.querySelectorAll('h2')).find(h => h.textContent.includes('Queue'));
+        // And ensure it has a close button
+        const headings = Array.from(document.querySelectorAll('h2, div'));
+        const queueHeader = headings.find(el =>
+            el.textContent && /Queue\s*\((\d+|Infinite)\)/.test(el.textContent) && (el.tagName === 'H2' || el.classList.contains('text-xl'))
+        );
+
         if (queueHeader) {
-            // This is a bit hacky as we don't control the React state, but we can change the DOM text
-            // It might get overwritten by React, but worth a shot for the "snapshot"
-            // Actually, let's find the specific "Queue (X)" text
-            const siblings = document.querySelectorAll('div, h2, span, button');
-            for (const el of siblings) {
-                if (el.textContent && /Queue\s*\(\d+\)/.test(el.textContent)) {
-                    el.textContent = `Queue (Infinite)`;
-                }
+            if (!queueHeader.textContent.includes('Infinite')) {
+                queueHeader.innerHTML = queueHeader.innerHTML.replace(/\(\d+\)/, '(Infinite)');
             }
+            injectQueueCloseButton(queueHeader);
         }
     }
+
+    let processingInfiniteScroll = false;
 
     function checkInfiniteScroll() {
         if (!scrollContainer || allMoviesData.length === 0) return;
@@ -735,6 +794,11 @@
 
         // If we are close to the end (within 3 slides height)
         if (distance < (scrollContainer.clientHeight * 3)) {
+            // Rate limit to avoid spamming
+            if (processingInfiniteScroll) return;
+            processingInfiniteScroll = true;
+            setTimeout(() => processingInfiniteScroll = false, 1000);
+
             console.log("[MovieShows] Infinite Scroll Triggered!");
             const recentTitles = videoSlides.slice(-15).map(s => s.querySelector('h2')?.textContent).filter(Boolean);
             const candidates = allMoviesData.filter(m => !recentTitles.includes(m.title));
@@ -742,6 +806,10 @@
             if (candidates.length > 0) {
                 const toAdd = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
                 toAdd.forEach(m => addMovieToFeed(m));
+            } else {
+                // Recycle
+                const recycled = allMoviesData.sort(() => 0.5 - Math.random()).slice(0, 3);
+                recycled.forEach(m => addMovieToFeed(m));
             }
         }
     }
