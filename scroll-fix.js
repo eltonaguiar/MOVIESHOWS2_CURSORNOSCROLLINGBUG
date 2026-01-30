@@ -301,48 +301,60 @@
             const items = carousel.querySelectorAll('img:not([data-click-handled])');
             items.forEach(img => {
                 img.setAttribute('data-click-handled', 'true');
-                const container = img.closest('div.cursor-pointer') || img.parentElement;
+                // Target the parent A tag or DIV, or just the IMG itself if no parent
+                const container = img.closest('a') || img.closest('div.cursor-pointer') || img.parentElement;
 
-                if (container) {
-                    container.style.pointerEvents = "auto";
-                    container.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
+                // Allow clicking the image itself if container is weird
+                const target = container || img;
 
-                        const title = img.alt || img.title;
-                        if (!title) return;
+                target.style.pointerEvents = "auto";
+                target.style.cursor = "pointer";
 
-                        console.log(`[MovieShows] Clicked carousel item: "${title}"`);
+                target.addEventListener('click', (e) => {
+                    // Stop any other listeners (like the broken one)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
 
-                        // 1. Check if already in feed
-                        let index = videoSlides.findIndex(slide => {
-                            const h2 = slide.querySelector('h2');
-                            // Loose match
-                            return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+                    const title = img.alt || img.title;
+                    console.log(`[MovieShows] Clicked carousel item: "${title}"`);
+                    if (!title) return;
+
+                    // 1. Check if already in feed (Video Slides)
+                    let index = videoSlides.findIndex(slide => {
+                        const h2 = slide.querySelector('h2');
+                        // Extremely loose matching
+                        return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+                    });
+
+                    if (index !== -1) {
+                        console.log(`[MovieShows] Found in feed at index ${index} ("${videoSlides[index].querySelector('h2').textContent}"). Jumping...`);
+                        scrollToSlide(index);
+                        return;
+                    }
+
+                    // 2. Load from DB
+                    if (allMoviesData.length > 0) {
+                        // Loose fuzzy match
+                        const lowerTitle = title.toLowerCase();
+                        const movie = allMoviesData.find(m => {
+                            const mTitle = m.title.toLowerCase();
+                            return mTitle.includes(lowerTitle) || lowerTitle.includes(mTitle);
                         });
 
-                        if (index !== -1) {
-                            console.log(`[MovieShows] Found in feed at index ${index}. Jumping...`);
-                            scrollToSlide(index);
-                            return;
+                        if (movie) {
+                            console.log(`[MovieShows] Found in DB, adding to feed:`, movie.title);
+                            addMovieToFeed(movie, true);
+                        } else {
+                            console.warn(`[MovieShows] Movie "${title}" not found in loaded database.`);
+                            // Fallback: Create a "stub" slide if we can't find data? 
+                            // Or just alert user? For now, log.
                         }
-
-                        // 2. If not, try to find in loaded data and add it
-                        if (allMoviesData.length > 0) {
-                            const movie = allMoviesData.find(m =>
-                                m.title.toLowerCase().includes(title.toLowerCase()) ||
-                                title.toLowerCase().includes(m.title.toLowerCase())
-                            );
-
-                            if (movie) {
-                                console.log(`[MovieShows] Found in DB, adding to feed:`, movie.title);
-                                addMovieToFeed(movie, true);
-                            } else {
-                                console.warn(`[MovieShows] Movie "${title}" not found in database.`);
-                            }
-                        }
-                    }, true);
-                }
+                    } else {
+                        console.warn("[MovieShows] Database not loaded yet.");
+                        loadMoviesData().then(() => target.click()); // Retry once
+                    }
+                }, true); // Capture phase to beat others
             });
         });
 
@@ -516,16 +528,42 @@
     async function loadMoviesData() {
         if (allMoviesData.length > 0) return;
         try {
-            const res = await fetch('movies-database-2026-01-30.json');
+            console.log("[MovieShows] Fetching movie data...");
+            // Try primary then fallback
+            let res = await fetch('movies-database-2026-01-30.json');
+            if (!res.ok) res = await fetch('movies-database.json'); // Fallback
+
             if (res.ok) {
                 const data = await res.json();
-                allMoviesData = data.items || [];
+                allMoviesData = data.items || data.movies || [];
                 console.log(`[MovieShows] Loaded ${allMoviesData.length} movies/shows.`);
+
+                // Hack: Populate to 20 immediately
+                ensureMinimumCount(20);
+
                 updateUpNextCount();
-                checkInfiniteScroll(); // Fill up if empty
+            } else {
+                console.error("[MovieShows] Could not load any movie database.");
             }
         } catch (e) {
             console.error("[MovieShows] Failed to load movie data", e);
+        }
+    }
+
+    function ensureMinimumCount(min) {
+        if (videoSlides.length < min && allMoviesData.length > 0) {
+            const needed = min - videoSlides.length;
+            console.log(`[MovieShows] Pre-filling feed with ${needed} more shows...`);
+
+            // Get current titles to avoid dupe blocks
+            const existingTitles = videoSlides.map(s => s.querySelector('h2')?.textContent || "");
+
+            const candidates = allMoviesData
+                .filter(m => !existingTitles.includes(m.title))
+                .sort(() => 0.5 - Math.random())
+                .slice(0, needed);
+
+            candidates.forEach(m => addMovieToFeed(m, false)); // No scroll, just append
         }
     }
 
@@ -579,7 +617,7 @@
                 <div class="absolute right-4 bottom-20 flex flex-col items-center gap-4 z-30 pointer-events-auto">
                     <button class="flex flex-col items-center gap-1 group">
                         <div class="p-3 rounded-full bg-black/40 backdrop-blur-sm transition-all duration-200 group-hover:bg-black/60">
-                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart w-8 h-8 text-white"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"></path></svg>
+                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart w-8 h-8 text-white"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"></path></svg>
                         </div>
                         <span class="text-xs font-semibold drop-shadow-md text-white">Like</span>
                     </button>
@@ -644,31 +682,49 @@
     }
 
     function updateUpNextCount() {
+        // Update the green button
         const spans = Array.from(document.querySelectorAll('span'));
         const upNextSpan = spans.find(s => s.textContent.includes("Up Next"));
         if (upNextSpan) {
-            const count = Math.max(20, allMoviesData.length - videoSlides.length + 20); // Just a mock number or real calculation
-            // User requested "20 shows to the up next".
-            // We can just keep it at "20+ Up Next" or dynamic.
-            upNextSpan.textContent = `20+ Up Next`;
+            const count = Math.max(20, allMoviesData.length - videoSlides.length + 20);
+            upNextSpan.textContent = `${count}+ Up Next - Infinite`;
+            // Also update parent button to green just in case
+            if (upNextSpan.parentElement) upNextSpan.parentElement.style.background = "#22c55e";
+        }
+
+        // Try to update the "Queue (10)" text in the side panel header if visible
+        const queueHeader = document.querySelector('h2.text-xl .text-amber-400') ||
+            Array.from(document.querySelectorAll('h2')).find(h => h.textContent.includes('Queue'));
+        if (queueHeader) {
+            // This is a bit hacky as we don't control the React state, but we can change the DOM text
+            // It might get overwritten by React, but worth a shot for the "snapshot"
+            // Actually, let's find the specific "Queue (X)" text
+            const siblings = document.querySelectorAll('div, h2, span, button');
+            for (const el of siblings) {
+                if (el.textContent && /Queue\s*\(\d+\)/.test(el.textContent)) {
+                    el.textContent = `Queue (Infinite)`;
+                }
+            }
         }
     }
 
     function checkInfiniteScroll() {
         if (!scrollContainer || allMoviesData.length === 0) return;
 
-        // If we are within 5 slides of the end, add more
-        if (videoSlides.length - currentIndex < 5) {
-            // Pick 5 random movies that are NOT in the last 10 slides
-            const recentTitles = videoSlides.slice(-10).map(s => s.querySelector('h2')?.textContent).filter(Boolean);
+        // Threshold: 3 screens from bottom
+        const scrollBottom = scrollContainer.scrollTop + scrollContainer.clientHeight;
+        const totalHeight = scrollContainer.scrollHeight;
+        const distance = totalHeight - scrollBottom;
 
+        // If we are close to the end (within 3 slides height)
+        if (distance < (scrollContainer.clientHeight * 3)) {
+            console.log("[MovieShows] Infinite Scroll Triggered!");
+            const recentTitles = videoSlides.slice(-15).map(s => s.querySelector('h2')?.textContent).filter(Boolean);
             const candidates = allMoviesData.filter(m => !recentTitles.includes(m.title));
 
             if (candidates.length > 0) {
-                // Shuffle and pick 3
                 const toAdd = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
                 toAdd.forEach(m => addMovieToFeed(m));
-                console.log(`[MovieShows] Infinite scroll: Added ${toAdd.length} shows.`);
             }
         }
     }
