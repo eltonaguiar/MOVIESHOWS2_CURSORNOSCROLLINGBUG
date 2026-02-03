@@ -1000,9 +1000,9 @@
         wrapper.id = "player-size-wrapper";
         wrapper.style.cssText = `
             position: fixed;
-            top: 8px;
-            right: 120px;
-            z-index: 9999;
+            top: 60px;
+            right: 10px;
+            z-index: 9998;
             display: flex;
             flex-direction: column;
             align-items: center;
