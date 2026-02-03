@@ -2121,6 +2121,10 @@
         }, 500);
     }
 
+    function isQueuePanelOpen() {
+        return queuePanel && (queuePanel.style.right === '0' || queuePanel.style.right === '0px');
+    }
+    
     function handleScroll() {
         if (isScrolling) return;
 
@@ -2131,7 +2135,7 @@
             // Switch to the new video
             forcePlayVisibleVideos();
             // Update queue panel to reflect current position
-            if (queuePanel && queuePanel.style.right === '0px') {
+            if (isQueuePanelOpen()) {
                 updateQueuePanel();
             }
         }
