@@ -19,6 +19,82 @@
     
     // ========== MUTE CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
+    let infoHidden = localStorage.getItem("movieshows-info-hidden") === "true";
+    let actionPanelHidden = localStorage.getItem("movieshows-action-hidden") === "true";
+    
+    // YouTube API Key (for future enhanced features)
+    const YOUTUBE_API_KEY = "AIzaSyBjZruHqjPi2I5XEkpfoNMO5LY-8pzbvgs";
+    
+    function createInfoToggle() {
+        if (document.getElementById("info-toggle")) return;
+        
+        const btn = document.createElement("button");
+        btn.id = "info-toggle";
+        btn.innerHTML = infoHidden ? "📝 Show Info" : "📝 Hide Info";
+        
+        if (infoHidden) {
+            document.body.classList.add("hide-movie-info");
+        }
+        
+        btn.addEventListener("click", () => {
+            infoHidden = !infoHidden;
+            localStorage.setItem("movieshows-info-hidden", infoHidden ? "true" : "false");
+            document.body.classList.toggle("hide-movie-info", infoHidden);
+            btn.innerHTML = infoHidden ? "📝 Show Info" : "📝 Hide Info";
+        });
+        
+        document.body.appendChild(btn);
+    }
+    
+    function createActionPanelToggle() {
+        if (document.getElementById("action-panel-toggle")) return;
+        
+        const btn = document.createElement("button");
+        btn.id = "action-panel-toggle";
+        
+        const updateBtn = () => {
+            btn.innerHTML = actionPanelHidden ? "◀" : "▶";
+            btn.title = actionPanelHidden ? "Show actions (Like/List/Share)" : "Hide actions";
+            btn.style.opacity = actionPanelHidden ? "1" : "0.5";
+        };
+        
+        if (actionPanelHidden) {
+            document.body.classList.add("hide-action-panel");
+        }
+        
+        updateBtn();
+        
+        btn.addEventListener("click", () => {
+            actionPanelHidden = !actionPanelHidden;
+            localStorage.setItem("movieshows-action-hidden", actionPanelHidden ? "true" : "false");
+            document.body.classList.toggle("hide-action-panel", actionPanelHidden);
+            updateBtn();
+        });
+        
+        // Allow drag to reveal (swipe from right edge)
+        let dragStartX = 0;
+        btn.addEventListener("touchstart", (e) => {
+            dragStartX = e.touches[0].clientX;
+        });
+        btn.addEventListener("touchend", (e) => {
+            const dragEndX = e.changedTouches[0].clientX;
+            if (dragStartX - dragEndX > 50 && !actionPanelHidden) {
+                // Swiped left - hide
+                actionPanelHidden = true;
+                localStorage.setItem("movieshows-action-hidden", "true");
+                document.body.classList.add("hide-action-panel");
+                updateBtn();
+            } else if (dragEndX - dragStartX > 50 && actionPanelHidden) {
+                // Swiped right - show
+                actionPanelHidden = false;
+                localStorage.setItem("movieshows-action-hidden", "false");
+                document.body.classList.remove("hide-action-panel");
+                updateBtn();
+            }
+        });
+        
+        document.body.appendChild(btn);
+    }
     
     function createMuteControl() {
         if (document.getElementById("mute-control")) return;
@@ -755,8 +831,7 @@
         wrapper.style.cssText = `
             position: fixed;
             top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
+            right: 120px;
             z-index: 9999;
             display: flex;
             flex-direction: column;
@@ -1424,11 +1499,94 @@
          display: none !important;
       }
 
-      /* Player size CSS classes */
-      .player-small iframe[src*="youtube"] { height: 40vh !important; max-height: 40vh !important; }
-      .player-medium iframe[src*="youtube"] { height: 60vh !important; max-height: 60vh !important; }
-      .player-large iframe[src*="youtube"] { height: 85vh !important; max-height: 85vh !important; }
-      .player-full iframe[src*="youtube"] { height: 100vh !important; max-height: 100vh !important; }
+      /* Player size CSS classes - FIXED to fill horizontally */
+      .player-small iframe[src*="youtube"], .player-small iframe.lazy-iframe { 
+        width: 100vw !important; 
+        height: 40vh !important; 
+        max-height: 40vh !important;
+        object-fit: cover !important;
+      }
+      .player-medium iframe[src*="youtube"], .player-medium iframe.lazy-iframe { 
+        width: 100vw !important; 
+        height: 60vh !important; 
+        max-height: 60vh !important;
+        object-fit: cover !important;
+      }
+      .player-large iframe[src*="youtube"], .player-large iframe.lazy-iframe { 
+        width: 100vw !important; 
+        height: 85vh !important; 
+        max-height: 85vh !important;
+        object-fit: cover !important;
+      }
+      .player-full iframe[src*="youtube"], .player-full iframe.lazy-iframe { 
+        width: 100vw !important; 
+        height: 100vh !important; 
+        max-height: 100vh !important;
+        object-fit: cover !important;
+      }
+      
+      /* Ensure iframe container fills width */
+      .snap-center .absolute.inset-0 {
+        width: 100vw !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+      }
+      
+      /* Hide movie info when toggled */
+      body.hide-movie-info .snap-center > div.absolute.bottom-4.left-4,
+      body.hide-movie-info .snap-center [class*="bottom-4"][class*="left-4"] {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.3s ease !important;
+      }
+      
+      /* Hide right action panel when toggled */
+      body.hide-action-panel .snap-center .absolute.right-4,
+      body.hide-action-panel .snap-center [class*="right-4"][class*="bottom-"] {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.3s ease !important;
+      }
+      
+      /* Action panel toggle button */
+      #action-panel-toggle {
+        position: fixed;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.2s;
+      }
+      #action-panel-toggle:hover {
+        background: rgba(34, 197, 94, 0.8);
+      }
+      
+      /* Info toggle button */
+      #info-toggle {
+        position: fixed;
+        left: 10px;
+        bottom: 80px;
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+      #info-toggle:hover {
+        background: rgba(34, 197, 94, 0.8);
+      }
     `;
         document.head.appendChild(style);
 
@@ -1525,6 +1683,7 @@
     function createSlide(movie, loadImmediately = false) {
         const slide = document.createElement("div");
         slide.className = "h-full w-full snap-center";
+        slide.dataset.movieTitle = movie.title || "Unknown"; // Store movie title for sync checking
 
         const embedUrl = getYouTubeEmbedUrl(movie.trailerUrl);
         const genresHtml = (movie.genres || []).map(g =>
@@ -1542,6 +1701,7 @@
                 <div class="absolute inset-0 w-full h-full bg-black">
                      <iframe 
                         data-src="${embedUrl}" 
+                        data-movie-title="${movie.title || 'Unknown'}"
                         src="${iframeSrc}" 
                         class="w-full h-full object-cover lazy-iframe" 
                         allow="autoplay; encrypted-media; picture-in-picture" 
@@ -2010,26 +2170,24 @@
 
     let videoObserver = null;
     let currentlyPlayingIframe = null;
+    let currentlyPlayingTitle = null;
     
     function setupVideoObserver() {
         if (videoObserver) return;
 
+        // Observer only PAUSES out-of-view videos
+        // Playback is controlled by forcePlayVisibleVideos() based on currentIndex
         videoObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const iframe = entry.target;
-                const slide = iframe.closest('[class*="snap-center"]');
-                const slideIndex = slide ? Array.from(slide.parentElement.children).indexOf(slide) : -1;
                 
-                if (entry.isIntersecting && entry.intersectionRatio >= 0.7) {
-                    // This is the main visible video - play it
-                    playVideo(iframe);
-                } else if (!entry.isIntersecting || entry.intersectionRatio < 0.3) {
-                    // Out of view - pause it
+                // Only pause if completely out of view
+                if (!entry.isIntersecting && entry.intersectionRatio < 0.1) {
                     pauseVideo(iframe);
                 }
             });
         }, {
-            threshold: [0.3, 0.7] // More precise thresholds
+            threshold: [0, 0.1, 0.5] 
         });
 
         // Observe existing
@@ -2038,11 +2196,13 @@
         });
     }
     
-    function playVideo(iframe) {
+    function playVideo(iframe, expectedTitle = null) {
         if (!iframe) return;
         
         let dataSrc = iframe.getAttribute('data-src');
         if (!dataSrc) return;
+        
+        const movieTitle = iframe.getAttribute('data-movie-title') || 'Unknown';
         
         // Apply current mute state to the URL
         dataSrc = dataSrc.replace(/mute=\d/, `mute=${getMuteParam()}`);
@@ -2056,9 +2216,15 @@
                 pauseVideo(currentlyPlayingIframe);
             }
             
-            console.log(`[MovieShows] Playing video (muted=${isMuted})`);
+            console.log(`[MovieShows] Playing: "${movieTitle}" (muted=${isMuted})`);
             iframe.setAttribute('src', dataSrc);
             currentlyPlayingIframe = iframe;
+            currentlyPlayingTitle = movieTitle;
+            
+            // Verify sync if expected title provided
+            if (expectedTitle && expectedTitle !== movieTitle) {
+                console.warn(`[MovieShows] SYNC WARNING: Expected "${expectedTitle}" but playing "${movieTitle}"`);
+            }
         }
     }
     
@@ -2066,12 +2232,32 @@
         if (!iframe) return;
         const src = iframe.getAttribute('src');
         if (src && src !== '') {
-            console.log(`[MovieShows] Pausing video (out of view)`);
+            const movieTitle = iframe.getAttribute('data-movie-title') || 'Unknown';
+            console.log(`[MovieShows] Pausing: "${movieTitle}"`);
             iframe.setAttribute('src', '');
             if (currentlyPlayingIframe === iframe) {
                 currentlyPlayingIframe = null;
+                currentlyPlayingTitle = null;
             }
         }
+    }
+    
+    function getCurrentSlideTitle() {
+        if (videoSlides.length === 0 || currentIndex < 0 || currentIndex >= videoSlides.length) {
+            return null;
+        }
+        const currentSlide = videoSlides[currentIndex];
+        return currentSlide?.dataset?.movieTitle || currentSlide?.querySelector('h2')?.textContent || null;
+    }
+    
+    function verifySyncState() {
+        const slideTitle = getCurrentSlideTitle();
+        if (slideTitle && currentlyPlayingTitle && slideTitle !== currentlyPlayingTitle) {
+            console.warn(`[MovieShows] DESYNC DETECTED: Slide shows "${slideTitle}" but playing "${currentlyPlayingTitle}". Fixing...`);
+            forcePlayVisibleVideos();
+            return false;
+        }
+        return true;
     }
 
     function clearPlaceholderSlides() {
@@ -2229,6 +2415,8 @@
         createPlayerSizeControl();
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
+        createInfoToggle();   // Toggle movie info visibility
+        createActionPanelToggle(); // Toggle right action panel
         setupCarouselInteractions();
         setupNavigationHandlers();  // Enable search, filters, queue panels
 
