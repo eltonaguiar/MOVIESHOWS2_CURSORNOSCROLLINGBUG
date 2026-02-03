@@ -840,38 +840,50 @@
                 }
                 
                 // Category: All
-                if (text.match(/^all\s*\(\d+\)$/i)) {
+                if (text.match(/^all\s*\(\s*\d+\s*\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        currentFilter = 'all';
-                        updateCategoryButtons();
-                        showToast("Showing all content");
+                        e.stopImmediatePropagation();
+                        if (currentFilter !== 'all') {
+                            currentFilter = 'all';
+                            updateCategoryButtons();
+                            repopulateFeedWithFilter();
+                            showToast("Showing all content");
+                        }
                     }, true);
                 }
                 
                 // Category: Movies
-                if (text.match(/^movies\s*\(\d+\)$/i)) {
+                if (text.match(/^movies\s*\(\s*\d+\s*\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        currentFilter = 'movies';
-                        updateCategoryButtons();
-                        showToast("Showing movies only");
+                        e.stopImmediatePropagation();
+                        if (currentFilter !== 'movies') {
+                            currentFilter = 'movies';
+                            updateCategoryButtons();
+                            repopulateFeedWithFilter();
+                            showToast("Showing movies only");
+                        }
                     }, true);
                 }
                 
                 // Category: TV
-                if (text.match(/^tv\s*\(\d+\)$/i)) {
+                if (text.match(/^tv\s*\(\s*\d+\s*\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        currentFilter = 'tv';
-                        updateCategoryButtons();
-                        showToast("Showing TV shows only");
+                        e.stopImmediatePropagation();
+                        if (currentFilter !== 'tv') {
+                            currentFilter = 'tv';
+                            updateCategoryButtons();
+                            repopulateFeedWithFilter();
+                            showToast("Showing TV shows only");
+                        }
                     }, true);
                 }
                 
@@ -883,9 +895,12 @@
                         e.preventDefault();
                         e.stopPropagation();
                         e.stopImmediatePropagation();
-                        currentFilter = 'nowplaying';
-                        updateCategoryButtons();
-                        showToast("Showing now playing");
+                        if (currentFilter !== 'nowplaying') {
+                            currentFilter = 'nowplaying';
+                            updateCategoryButtons();
+                            repopulateFeedWithFilter();
+                            showToast("Showing now playing in theaters");
+                        }
                     }, true);
                 }
                 
@@ -2015,14 +2030,17 @@
 
             console.log("[MovieShows] Infinite Scroll Triggered!");
             const recentTitles = videoSlides.slice(-15).map(s => s.querySelector('h2')?.textContent).filter(Boolean);
-            const candidates = allMoviesData.filter(m => !recentTitles.includes(m.title));
+            
+            // Use filtered movies based on current filter
+            const filteredMovies = getFilteredMovies();
+            const candidates = filteredMovies.filter(m => !recentTitles.includes(m.title));
 
             if (candidates.length > 0) {
                 const toAdd = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
                 toAdd.forEach(m => addMovieToFeed(m));
-            } else {
-                // Recycle
-                const recycled = allMoviesData.sort(() => 0.5 - Math.random()).slice(0, 3);
+            } else if (filteredMovies.length > 0) {
+                // Recycle from filtered list
+                const recycled = filteredMovies.sort(() => 0.5 - Math.random()).slice(0, 3);
                 recycled.forEach(m => addMovieToFeed(m));
             }
         }
@@ -2414,6 +2432,81 @@
         }
     }
 
+    function getFilteredMovies() {
+        // Filter movies based on current category
+        let filtered = allMoviesData.filter(m => m.trailerUrl && m.trailerUrl.length > 10);
+        
+        if (currentFilter === 'movies') {
+            filtered = filtered.filter(m => !m.type || m.type === 'movie' || m.type === 'Movie');
+        } else if (currentFilter === 'tv') {
+            filtered = filtered.filter(m => m.type === 'tv' || m.type === 'TV' || m.type === 'series' || m.type === 'Series');
+        } else if (currentFilter === 'nowplaying') {
+            filtered = filtered.filter(m => 
+                m.source === 'Now Playing' || 
+                m.source === 'In Theatres' || 
+                m.source === 'In Theaters' ||
+                m.nowPlaying === true ||
+                (m.badges && m.badges.includes('IN THEATRES'))
+            );
+        }
+        
+        return filtered;
+    }
+    
+    function repopulateFeedWithFilter() {
+        if (!scrollContainer || allMoviesData.length === 0) {
+            console.warn("[MovieShows] Cannot repopulate - no container or data");
+            return;
+        }
+        
+        console.log(`[MovieShows] Repopulating feed with filter: ${currentFilter}`);
+        
+        // Pause current video
+        if (currentlyPlayingIframe) {
+            pauseVideo(currentlyPlayingIframe);
+        }
+        
+        // Clear existing slides
+        const existingSlides = scrollContainer.querySelectorAll('.snap-center');
+        existingSlides.forEach(slide => slide.remove());
+        videoSlides = [];
+        currentIndex = 0;
+        
+        // Get filtered movies
+        const filteredMovies = getFilteredMovies();
+        console.log(`[MovieShows] Found ${filteredMovies.length} ${currentFilter} items with trailers`);
+        
+        if (filteredMovies.length === 0) {
+            showToast(`No ${currentFilter === 'nowplaying' ? 'now playing' : currentFilter} content with trailers`, true);
+            // Fall back to showing all
+            currentFilter = 'all';
+            updateCategoryButtons();
+            const allMovies = allMoviesData.filter(m => m.trailerUrl && m.trailerUrl.length > 10).slice(0, 10);
+            allMovies.forEach((movie, index) => {
+                addMovieToFeed(movie, false, index === 0);
+            });
+        } else {
+            // Add filtered movies (up to 15 initially)
+            const toAdd = filteredMovies.slice(0, 15);
+            toAdd.forEach((movie, index) => {
+                addMovieToFeed(movie, false, index === 0);
+            });
+        }
+        
+        // Refresh slide list
+        videoSlides = findVideoSlides();
+        
+        // Scroll to first and play
+        setTimeout(() => {
+            scrollToSlide(0);
+            forcePlayVisibleVideos();
+            // Update queue panel if open
+            if (queuePanel && queuePanel.style.right === '0px') {
+                updateQueuePanel();
+            }
+        }, 300);
+    }
+    
     function populateInitialVideos() {
         if (allMoviesData.length === 0) {
             console.log("[MovieShows] Waiting for movie data...");
@@ -2437,32 +2530,17 @@
 
         console.log("[MovieShows] Populating initial videos from database...");
 
-        // CRITICAL: Only use movies that have a valid trailerUrl
-        const moviesWithTrailers = allMoviesData.filter(m => m.trailerUrl && m.trailerUrl.length > 10);
-        console.log(`[MovieShows] Found ${moviesWithTrailers.length} movies with valid trailer URLs`);
+        // Use filtered movies based on current filter
+        const filteredMovies = getFilteredMovies();
+        console.log(`[MovieShows] Found ${filteredMovies.length} movies with valid trailer URLs (filter: ${currentFilter})`);
 
-        if (moviesWithTrailers.length === 0) {
+        if (filteredMovies.length === 0) {
             console.error("[MovieShows] No movies with trailer URLs found!");
             return;
         }
 
-        // Find Dune: Part Two first (specifically "Dune", not just "part two")
-        const duneMovie = moviesWithTrailers.find(m => 
-            m.title?.toLowerCase().includes('dune')
-        );
-        
-        // Build initial list: Dune first if found, then others
-        let initialMovies = [];
-        if (duneMovie) {
-            console.log(`[MovieShows] Found Dune movie: ${duneMovie.title}`);
-            initialMovies.push(duneMovie);
-            // Add 9 more random movies (excluding Dune)
-            const others = moviesWithTrailers.filter(m => m.title !== duneMovie.title).slice(0, 9);
-            initialMovies = initialMovies.concat(others);
-        } else {
-            // Fallback: just use first 10 with trailers
-            initialMovies = moviesWithTrailers.slice(0, 10);
-        }
+        // Build initial list (up to 10)
+        const initialMovies = filteredMovies.slice(0, 10);
 
         // Add movies to feed - load first one immediately, others lazy
         initialMovies.forEach((movie, index) => {
