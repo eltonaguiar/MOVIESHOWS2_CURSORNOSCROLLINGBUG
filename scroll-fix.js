@@ -502,15 +502,33 @@
     }
     
     function setupNavigationHandlers() {
-        // Utility to get clean button text (handles nested elements)
+        // Utility to get clean button text (handles nested elements, icons, etc.)
         const getButtonText = (btn) => {
             // Try aria-label first
             const ariaLabel = btn.getAttribute("aria-label");
             if (ariaLabel) return ariaLabel.toLowerCase();
             
+            // Try title attribute
+            const title = btn.getAttribute("title");
+            if (title) return title.toLowerCase();
+            
+            // Look for child span or text nodes
+            const spans = btn.querySelectorAll("span");
+            for (const span of spans) {
+                const spanText = span.textContent?.trim();
+                if (spanText && spanText.length > 1) return spanText.toLowerCase();
+            }
+            
             // Try innerText which ignores SVG text
             const innerText = btn.innerText?.trim().toLowerCase();
             if (innerText) return innerText;
+            
+            // Check adjacent sibling text (sometimes buttons have text next to them)
+            const nextSibling = btn.nextSibling;
+            if (nextSibling && nextSibling.nodeType === 3) { // Text node
+                const siblingText = nextSibling.textContent?.trim();
+                if (siblingText) return siblingText.toLowerCase();
+            }
             
             // Fallback to textContent
             return btn.textContent?.trim().toLowerCase() || "";
@@ -534,8 +552,12 @@
                     foundCount++;
                 }
                 
-                // Search & Browse (check for "search" in text)
-                if (text.includes("search")) {
+                // Check for SVG icons to identify icon-only buttons
+                const hasSvg = btn.querySelector("svg");
+                const svgClass = hasSvg?.classList.toString().toLowerCase() || "";
+                
+                // Search & Browse (check for "search" in text OR search icon)
+                if (text.includes("search") || svgClass.includes("search")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -549,8 +571,8 @@
                     console.log("[MovieShows] Bound Search & Browse button");
                 }
                 
-                // Filters
-                if (text.includes("filter")) {
+                // Filters (check for "filter" in text OR filter/sliders icon)
+                if (text.includes("filter") || svgClass.includes("filter") || svgClass.includes("sliders")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -563,8 +585,8 @@
                     console.log("[MovieShows] Bound Filters button");
                 }
                 
-                // My Queue
-                if (text.includes("queue")) {
+                // My Queue (check for "queue" in text OR list icon)
+                if (text.includes("queue") || (svgClass.includes("list") && !text.includes("play"))) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
