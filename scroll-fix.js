@@ -1268,25 +1268,59 @@
 
         // Clear any placeholder slides first
         clearPlaceholderSlides();
+        
+        // Reset videoSlides after clearing
+        videoSlides = [];
 
         // Check if we already have video slides with real content
         const existingSlides = scrollContainer?.querySelectorAll('iframe[data-src]') || [];
         if (existingSlides.length > 0) {
             console.log(`[MovieShows] Already have ${existingSlides.length} video slides`);
+            videoSlides = findVideoSlides();
             return;
         }
 
         console.log("[MovieShows] Populating initial videos from database...");
 
-        // Add first 10 movies to start
-        const initialMovies = allMoviesData.slice(0, 10);
-        initialMovies.forEach((movie, i) => {
-            addMovieToFeed(movie, i === 0); // Scroll to first one
+        // Find Dune: Part Two first (the original default video)
+        const duneMovie = allMoviesData.find(m => 
+            m.title?.toLowerCase().includes('dune') || 
+            m.title?.toLowerCase().includes('part two')
+        );
+        
+        // Build initial list: Dune first if found, then others
+        let initialMovies = [];
+        if (duneMovie) {
+            initialMovies.push(duneMovie);
+            // Add 9 more random movies (excluding Dune)
+            const others = allMoviesData.filter(m => m.title !== duneMovie.title).slice(0, 9);
+            initialMovies = initialMovies.concat(others);
+        } else {
+            // Fallback: just use first 10
+            initialMovies = allMoviesData.slice(0, 10);
+        }
+
+        // Add movies to feed - DON'T scroll during add, scroll after all added
+        initialMovies.forEach((movie) => {
+            addMovieToFeed(movie, false);
         });
 
-        // Refresh slide list
+        // Refresh slide list AFTER adding all movies
         videoSlides = findVideoSlides();
         console.log(`[MovieShows] Added ${initialMovies.length} initial videos`);
+
+        // Now scroll to first slide and force play
+        if (videoSlides.length > 0) {
+            setTimeout(() => {
+                scrollToSlide(0);
+                const firstSlide = videoSlides[0];
+                const iframe = firstSlide?.querySelector('iframe');
+                if (iframe && iframe.dataset.src) {
+                    console.log("[MovieShows] Auto-playing first video...");
+                    iframe.src = iframe.dataset.src;
+                }
+            }, 200);
+        }
     }
 
     function init() {
