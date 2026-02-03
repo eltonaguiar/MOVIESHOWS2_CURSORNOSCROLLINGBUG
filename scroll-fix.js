@@ -531,7 +531,18 @@
         const getPosterFromData = (title) => {
             if (!title || title === 'Unknown') return null;
             const movie = window.allMoviesData?.find(m => m.title === title);
-            return movie?.posterUrl || null;
+            // Check posterUrl first, then image property, then try to construct from TMDB
+            if (movie) {
+                return movie.posterUrl || movie.image || 
+                    (movie.tmdbId ? `https://image.tmdb.org/t/p/w200/${movie.tmdbId}.jpg` : null);
+            }
+            return null;
+        };
+        
+        // Generate a placeholder image URL with the title's first letter
+        const getPlaceholderUrl = (title, width = 50, height = 75, color = '666') => {
+            const letter = title?.charAt(0)?.toUpperCase() || '?';
+            return `https://via.placeholder.com/${width}x${height}/1a1a2e/${color}?text=${encodeURIComponent(letter)}`;
         };
         
         // Get the actual visible slide's title and poster from the DOM (what user sees)
@@ -606,9 +617,9 @@
                 </h3>
                 <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3); display: flex; gap: 12px; align-items: center;">
                     ${isThumbnailMode ? `
-                        <img src="${nowPlayingPoster || 'https://via.placeholder.com/50x75/1a1a2e/22c55e?text=' + encodeURIComponent(nowPlayingTitle?.charAt(0) || '?')}" 
+                        <img src="${nowPlayingPoster || getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}" 
                             style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a2e;" 
-                            onerror="this.src='https://via.placeholder.com/50x75/1a1a2e/22c55e?text=?'">
+                            onerror="this.src='${getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}'">
                     ` : ''}
                     <div style="flex: 1; min-width: 0;">
                         <h4 style="color: white; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nowPlayingTitle}</h4>
@@ -621,16 +632,19 @@
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, videoSlides.length - actualVisibleIndex - 1)} videos)</h3>
                 <div id="up-next-items" style="display: flex; flex-direction: column; gap: ${isThumbnailMode ? '8px' : '4px'}; max-height: 200px; overflow-y: auto;">
-                    ${upNextItems.map((item, i) => isThumbnailMode ? `
+                    ${upNextItems.map((item, i) => {
+                        // Always try to get poster for thumbnail mode
+                        const itemPoster = item.posterUrl || getPosterFromData(item.title) || getPlaceholderUrl(item.title, 30, 45, '666');
+                        return isThumbnailMode ? `
                         <div class="up-next-item" data-index="${item.index}" style="
                             display: flex; gap: 10px; padding: 8px; background: rgba(255,255,255,0.03);
                             border-radius: 8px; cursor: pointer; transition: all 0.2s;
                             border: 1px solid rgba(255,255,255,0.05); align-items: center;
                         " onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
                             <span style="color: #666; font-size: 12px; min-width: 20px;">${i + 1}</span>
-                            <img src="${item.posterUrl || 'https://via.placeholder.com/30x45/1a1a2e/666?text=' + encodeURIComponent(item.title?.charAt(0) || '?')}" 
+                            <img src="${itemPoster}" 
                                 style="width: 30px; height: 45px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #1a1a2e;" 
-                                onerror="this.src='https://via.placeholder.com/30x45/1a1a2e/666?text=?'">
+                                onerror="this.src='${getPlaceholderUrl(item.title, 30, 45, '666')}'">
                             <span style="color: white; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
                         </div>
                     ` : `
@@ -641,7 +655,7 @@
                             <span style="color: #666; font-size: 11px; min-width: 18px;">${i + 1}.</span>
                             <span style="color: #ccc; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
                         </div>
-                    `).join('') || '<p style="color: #666; font-size: 13px; padding: 8px;">No more videos in queue</p>'}
+                    `; }).join('') || '<p style="color: #666; font-size: 13px; padding: 8px;">No more videos in queue</p>'}
                 </div>
             </div>
             
@@ -658,15 +672,18 @@
                     </div>
                 ` : isThumbnailMode ? `
                     <div id="queue-items" style="display: flex; flex-direction: column; gap: 8px;">
-                        ${userQueue.map((item, index) => `
+                        ${userQueue.map((item, index) => {
+                            const savedPoster = item.posterUrl || getPosterFromData(item.title) || getPlaceholderUrl(item.title, 40, 60, 'fff');
+                            return `
                             <div class="queue-item" draggable="true" data-index="${index}" style="
                                 display: flex; gap: 10px; padding: 10px; background: rgba(255,255,255,0.05);
                                 border-radius: 10px; cursor: grab; transition: all 0.2s;
                                 border: 1px solid rgba(255,255,255,0.1);
                             ">
                                 <div class="drag-handle" style="display: flex; align-items: center; color: #555; cursor: grab;">⋮⋮</div>
-                                <img src="${item.posterUrl || 'https://via.placeholder.com/40x60/1a1a2e/ffffff?text=?'}" 
-                                    style="width: 40px; height: 60px; object-fit: cover; border-radius: 6px;" onerror="this.src='https://via.placeholder.com/40x60/1a1a2e/ffffff?text=?'">
+                                <img src="${savedPoster}" 
+                                    style="width: 40px; height: 60px; object-fit: cover; border-radius: 6px; background: #1a1a2e;" 
+                                    onerror="this.src='${getPlaceholderUrl(item.title, 40, 60, 'fff')}'">
                                 <div style="flex: 1; min-width: 0;">
                                     <h4 style="color: white; font-size: 13px; margin: 0 0 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h4>
                                     <p style="color: #888; font-size: 11px; margin: 0;">${item.year || ''}</p>
@@ -678,7 +695,7 @@
                                     </div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `; }).join('')}
                     </div>
                 ` : `
                     <div id="queue-items" style="display: flex; flex-direction: column; gap: 4px;">
