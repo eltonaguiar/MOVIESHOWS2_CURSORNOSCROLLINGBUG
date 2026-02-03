@@ -16,6 +16,7 @@
     let filterPanel = null;
     let queuePanel = null;
     let userQueue = JSON.parse(localStorage.getItem("movieshows-queue") || "[]");
+    let queueViewMode = localStorage.getItem("movieshows-queue-view") || "thumbnail"; // "thumbnail" or "text"
     
     // ========== MUTE CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
@@ -526,13 +527,15 @@
         const actualVisibleIndex = getCurrentVisibleIndex();
         currentIndex = actualVisibleIndex; // Sync currentIndex
         
-        // Get the actual visible slide's title from the DOM (what user sees)
+        // Get the actual visible slide's title and poster from the DOM (what user sees)
         let nowPlayingTitle = 'Unknown';
+        let nowPlayingPoster = null;
         if (videoSlides[actualVisibleIndex]) {
             const visibleSlide = videoSlides[actualVisibleIndex];
             nowPlayingTitle = visibleSlide.dataset?.movieTitle || 
                               visibleSlide.querySelector('h2')?.textContent || 
                               'Unknown';
+            nowPlayingPoster = visibleSlide.querySelector('img')?.src || null;
         }
         
         // Build playlist with deduplication
@@ -559,32 +562,67 @@
             item.index > actualVisibleIndex && item.title !== nowPlayingTitle
         ).slice(0, 5);
         
+        const isThumbnailMode = queueViewMode === 'thumbnail';
+        
         // Build the panel HTML
         content.innerHTML = `
+            <!-- View Mode Toggle -->
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px;">
+                    <button id="queue-view-thumbnail" style="
+                        padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
+                        background: ${isThumbnailMode ? 'rgba(34, 197, 94, 0.3)' : 'transparent'};
+                        color: ${isThumbnailMode ? '#22c55e' : '#888'};
+                        transition: all 0.2s;
+                    " title="Thumbnail view">🖼️ Thumbnails</button>
+                    <button id="queue-view-text" style="
+                        padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
+                        background: ${!isThumbnailMode ? 'rgba(34, 197, 94, 0.3)' : 'transparent'};
+                        color: ${!isThumbnailMode ? '#22c55e' : '#888'};
+                        transition: all 0.2s;
+                    " title="Text only view">📝 Text Only</button>
+                </div>
+            </div>
+            
             <!-- Now Playing Section -->
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #22c55e; font-size: 14px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                     <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite;"></span>
                     Now Playing
                 </h3>
-                <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3);">
-                    <h4 style="color: white; font-size: 16px; margin: 0;">${nowPlayingTitle}</h4>
-                    <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${actualVisibleIndex + 1} of ${videoSlides.length}</p>
+                <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3); display: flex; gap: 12px; align-items: center;">
+                    ${isThumbnailMode && nowPlayingPoster ? `
+                        <img src="${nowPlayingPoster}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0;" 
+                            onerror="this.style.display='none'">
+                    ` : ''}
+                    <div style="flex: 1; min-width: 0;">
+                        <h4 style="color: white; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nowPlayingTitle}</h4>
+                        <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${actualVisibleIndex + 1} of ${videoSlides.length}</p>
+                    </div>
                 </div>
             </div>
             
             <!-- Up Next Section -->
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, videoSlides.length - actualVisibleIndex - 1)} videos)</h3>
-                <div id="up-next-items" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
-                    ${upNextItems.map((item, i) => `
+                <div id="up-next-items" style="display: flex; flex-direction: column; gap: ${isThumbnailMode ? '8px' : '4px'}; max-height: 200px; overflow-y: auto;">
+                    ${upNextItems.map((item, i) => isThumbnailMode ? `
                         <div class="up-next-item" data-index="${item.index}" style="
                             display: flex; gap: 10px; padding: 8px; background: rgba(255,255,255,0.03);
                             border-radius: 8px; cursor: pointer; transition: all 0.2s;
-                            border: 1px solid rgba(255,255,255,0.05);
+                            border: 1px solid rgba(255,255,255,0.05); align-items: center;
                         " onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
                             <span style="color: #666; font-size: 12px; min-width: 20px;">${i + 1}</span>
+                            ${item.posterUrl ? `<img src="${item.posterUrl}" style="width: 30px; height: 45px; object-fit: cover; border-radius: 4px;" onerror="this.style.display='none'">` : ''}
                             <span style="color: white; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
+                        </div>
+                    ` : `
+                        <div class="up-next-item" data-index="${item.index}" style="
+                            display: flex; gap: 8px; padding: 6px 8px; background: transparent;
+                            cursor: pointer; transition: all 0.2s; border-radius: 4px;
+                        " onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                            <span style="color: #666; font-size: 11px; min-width: 18px;">${i + 1}.</span>
+                            <span style="color: #ccc; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
                         </div>
                     `).join('') || '<p style="color: #666; font-size: 13px; padding: 8px;">No more videos in queue</p>'}
                 </div>
@@ -601,7 +639,7 @@
                     <div style="text-align: center; padding: 20px; background: rgba(255,255,255,0.02); border-radius: 12px;">
                         <p style="color: #666; font-size: 13px; margin: 0;">Click the "List" button on any video to save it here</p>
                     </div>
-                ` : `
+                ` : isThumbnailMode ? `
                     <div id="queue-items" style="display: flex; flex-direction: column; gap: 8px;">
                         ${userQueue.map((item, index) => `
                             <div class="queue-item" draggable="true" data-index="${index}" style="
@@ -625,6 +663,23 @@
                             </div>
                         `).join('')}
                     </div>
+                ` : `
+                    <div id="queue-items" style="display: flex; flex-direction: column; gap: 4px;">
+                        ${userQueue.map((item, index) => `
+                            <div class="queue-item" draggable="true" data-index="${index}" style="
+                                display: flex; gap: 8px; padding: 8px 10px; background: rgba(255,255,255,0.03);
+                                border-radius: 6px; cursor: grab; transition: all 0.2s;
+                                border: 1px solid rgba(255,255,255,0.05); align-items: center;
+                            ">
+                                <div class="drag-handle" style="color: #555; cursor: grab; font-size: 10px;">⋮⋮</div>
+                                <span style="color: white; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
+                                <button class="play-queue-item" style="padding: 3px 8px; background: #22c55e; color: black; 
+                                    border: none; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">▶</button>
+                                <button class="remove-queue-item" style="padding: 3px 6px; background: rgba(255,255,255,0.1); 
+                                    color: #aaa; border: none; border-radius: 4px; font-size: 10px; cursor: pointer;">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
                 `}
             </div>
             
@@ -642,6 +697,23 @@
                 }
             </style>
         `;
+        
+        // Add handlers for view mode toggle
+        content.querySelector("#queue-view-thumbnail")?.addEventListener("click", () => {
+            if (queueViewMode !== 'thumbnail') {
+                queueViewMode = 'thumbnail';
+                localStorage.setItem("movieshows-queue-view", queueViewMode);
+                updateQueuePanel();
+            }
+        });
+        
+        content.querySelector("#queue-view-text")?.addEventListener("click", () => {
+            if (queueViewMode !== 'text') {
+                queueViewMode = 'text';
+                localStorage.setItem("movieshows-queue-view", queueViewMode);
+                updateQueuePanel();
+            }
+        });
         
         // Add handlers for clear queue
         content.querySelector("#clear-queue")?.addEventListener("click", () => {
