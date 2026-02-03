@@ -2130,6 +2130,10 @@
             checkInfiniteScroll(); // Check if we need more content
             // Switch to the new video
             forcePlayVisibleVideos();
+            // Update queue panel to reflect current position
+            if (queuePanel && queuePanel.style.right === '0px') {
+                updateQueuePanel();
+            }
         }
     }
 
@@ -2500,10 +2504,8 @@
         setTimeout(() => {
             scrollToSlide(0);
             forcePlayVisibleVideos();
-            // Update queue panel if open
-            if (queuePanel && queuePanel.style.right === '0px') {
-                updateQueuePanel();
-            }
+            // Always update queue panel after filter change
+            updateQueuePanel();
         }, 300);
     }
     
