@@ -9,6 +9,80 @@
     let isScrolling = false;
     let scrollTimeout = null;
     const SCROLL_COOLDOWN = 500;
+    
+    // ========== MUTE CONTROL ==========
+    let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
+    
+    function createMuteControl() {
+        if (document.getElementById("mute-control")) return;
+        
+        const btn = document.createElement("button");
+        btn.id = "mute-control";
+        btn.innerHTML = isMuted ? "🔇 Unmute" : "🔊 Muted";
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10000;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: 2px solid #22c55e;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        `;
+        
+        btn.addEventListener("mouseenter", () => {
+            btn.style.background = "rgba(34, 197, 94, 0.9)";
+            btn.style.transform = "scale(1.05)";
+        });
+        btn.addEventListener("mouseleave", () => {
+            btn.style.background = "rgba(0, 0, 0, 0.8)";
+            btn.style.transform = "scale(1)";
+        });
+        
+        btn.addEventListener("click", () => {
+            isMuted = !isMuted;
+            localStorage.setItem("movieshows-muted", isMuted ? "true" : "false");
+            btn.innerHTML = isMuted ? "🔇 Unmute" : "🔊 Muted";
+            applyMuteStateToAllVideos();
+            console.log(`[MovieShows] Sound ${isMuted ? 'muted' : 'unmuted'}`);
+        });
+        
+        document.body.appendChild(btn);
+        console.log("[MovieShows] Mute control created");
+    }
+    
+    function applyMuteStateToAllVideos() {
+        // Update all iframe src URLs to reflect mute state
+        const iframes = document.querySelectorAll('iframe[src*="youtube"]');
+        iframes.forEach(iframe => {
+            const currentSrc = iframe.src;
+            if (currentSrc) {
+                // Replace mute parameter
+                let newSrc;
+                if (currentSrc.includes('mute=')) {
+                    newSrc = currentSrc.replace(/mute=\d/, `mute=${isMuted ? 1 : 0}`);
+                } else {
+                    newSrc = currentSrc + `&mute=${isMuted ? 1 : 0}`;
+                }
+                
+                // Only update if changed (to avoid reload flicker)
+                if (newSrc !== currentSrc) {
+                    iframe.src = newSrc;
+                }
+            }
+        });
+    }
+    
+    function getMuteParam() {
+        return isMuted ? 1 : 0;
+    }
 
     // ========== PLAYER SIZE CONTROL ==========
 
@@ -710,7 +784,7 @@
         }
     }
 
-    function getYouTubeEmbedUrl(url) {
+    function getYouTubeEmbedUrl(url, forceInitialMute = true) {
         if (!url) return "";
         let videoId = "";
         try {
@@ -724,9 +798,10 @@
         } catch (e) { return url; }
 
         if (videoId) {
-            // Autoplay=1, Mute=1 (required for autoplay), Controls=0, Loop=1
-            // Modern browsers require mute=1 for autoplay to work
-            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${videoId}&modestbranding=1&rel=0`;
+            // For initial load, always mute=1 for autoplay compliance
+            // After user interaction (unmute button), we can use mute=0
+            const muteValue = forceInitialMute ? 1 : getMuteParam();
+            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muteValue}&controls=1&playsinline=1&loop=1&playlist=${videoId}&modestbranding=1&rel=0&enablejsapi=1`;
         }
         return url;
     }
@@ -1224,9 +1299,13 @@
                 const iframe = entry.target;
                 if (entry.isIntersecting) {
                     // Load src if empty
-                    const dataSrc = iframe.getAttribute('data-src');
+                    let dataSrc = iframe.getAttribute('data-src');
                     if (dataSrc && !iframe.getAttribute('src')) {
-                        console.log(`[MovieShows] Playing video: ${dataSrc}`);
+                        // Apply current mute state to the URL
+                        if (dataSrc.includes('mute=')) {
+                            dataSrc = dataSrc.replace(/mute=\d/, `mute=${getMuteParam()}`);
+                        }
+                        console.log(`[MovieShows] Playing video (muted=${isMuted}): ${dataSrc}`);
                         iframe.setAttribute('src', dataSrc);
                     }
                 } else {
@@ -1391,6 +1470,7 @@
         setupIframeObserver();
         createPlayerSizeControl();
         createLayoutControl();
+        createMuteControl();  // Add persistent mute/unmute button
         setupCarouselInteractions();
 
         // START LOADING DATA
