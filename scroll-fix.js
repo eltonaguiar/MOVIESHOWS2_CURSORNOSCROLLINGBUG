@@ -514,14 +514,14 @@
                 // Skip if already handled
                 if (btn.dataset.navHandled) return;
                 
-                // Debug: log buttons that might be nav-related
-                if (text.includes("search") || text.includes("filter") || text.includes("queue") || text.includes("all") || text.includes("movies") || text.includes("tv")) {
-                    console.log(`[MovieShows] Found potential nav button: "${text}"`);
-                    foundCount++;
+                // Debug: log all button texts
+                if (!btn.dataset.navLogged) {
+                    console.log(`[MovieShows] Button text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+                    btn.dataset.navLogged = "true";
                 }
                 
-                // Search & Browse
-                if (text.includes("search") && text.includes("browse")) {
+                // Search & Browse (check for "search" in text - may be just icon+text)
+                if (text.includes("search")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -536,7 +536,7 @@
                 }
                 
                 // Filters
-                if (text === "filters") {
+                if (text.includes("filter")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -550,7 +550,7 @@
                 }
                 
                 // My Queue
-                if (text.includes("my queue")) {
+                if (text.includes("queue")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -564,7 +564,7 @@
                 }
                 
                 // Category: All
-                if (text.match(/^all\s*\(\s*\d+\s*\)$/)) {
+                if (text.match(/^all\s*\(\d+\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -576,7 +576,7 @@
                 }
                 
                 // Category: Movies
-                if (text.match(/^movies\s*\(\s*\d+\s*\)$/)) {
+                if (text.match(/^movies\s*\(\d+\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -588,7 +588,7 @@
                 }
                 
                 // Category: TV
-                if (text.match(/^tv\s*\(\s*\d+\s*\)$/)) {
+                if (text.match(/^tv\s*\(\d+\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -600,7 +600,7 @@
                 }
                 
                 // Category: Now Playing
-                if (text.match(/^now playing\s*\(\s*\d+\s*\)$/)) {
+                if (text.match(/^now playing\s*\(\d+\)$/i)) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
