@@ -17,7 +17,7 @@ define('DB_USER', 'ejaguiar1_tvmovie'); // Standard format for 50webs
 define('DB_PASS', 'virus2016');
 
 // App identifier to avoid conflicts with shared database
-define('APP_SOURCE', 'movieshows2_cursor'); // Unique identifier for this app instance
+define('APP_SOURCE', 'movieshows3'); // Unique identifier for this app instance (movieshows3 deployment)
 
 // CORS settings
 define('ALLOWED_ORIGINS', [
