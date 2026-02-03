@@ -7,7 +7,7 @@ test.describe('MovieShows App Tests', () => {
     
     test.beforeEach(async ({ page }) => {
         // Navigate and wait for the app to load
-        await page.goto(BASE_URL + '?v36test');
+        await page.goto(BASE_URL + '?v37test');
         // Wait for the scroll-fix.js to initialize (looks for our custom controls)
         await page.waitForTimeout(4000);
     });
@@ -177,6 +177,34 @@ test.describe('MovieShows App Tests', () => {
             
             // They should match!
             expect(queueNowPlayingTitle).toBe(visibleTitle);
+        });
+
+        test('queue view mode toggle works', async ({ page }) => {
+            // Open queue
+            await page.getByRole('button', { name: /My Queue/i }).click();
+            await page.waitForTimeout(1000);
+            
+            // Check that view mode buttons exist
+            const thumbnailBtn = page.locator('#queue-view-thumbnail');
+            const textBtn = page.locator('#queue-view-text');
+            await expect(thumbnailBtn).toBeVisible();
+            await expect(textBtn).toBeVisible();
+            
+            // Click text-only mode
+            await textBtn.click();
+            await page.waitForTimeout(500);
+            
+            // Verify text mode is now active (has green color - can be rgb or hex)
+            const textBtnStyle = await textBtn.evaluate(el => el.style.color);
+            expect(textBtnStyle).toMatch(/22c55e|rgb\(34,?\s*197,?\s*94\)/i); // Green color
+            
+            // Click thumbnail mode
+            await thumbnailBtn.click();
+            await page.waitForTimeout(500);
+            
+            // Verify thumbnail mode is now active
+            const thumbBtnStyle = await thumbnailBtn.evaluate(el => el.style.color);
+            expect(thumbBtnStyle).toMatch(/22c55e|rgb\(34,?\s*197,?\s*94\)/i); // Green color
         });
 
         test('CRITICAL: queue shows correct video after scrolling', async ({ page }) => {
