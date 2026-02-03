@@ -10,6 +10,85 @@
     let scrollTimeout = null;
     const SCROLL_COOLDOWN = 500;
 
+    // ========== COLLAPSIBLE SETTINGS PANEL ==========
+
+    let settingsPanelCollapsed = false;
+
+    function createSettingsToggleButton() {
+        if (document.getElementById("settings-toggle-btn")) return;
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.id = "settings-toggle-btn";
+        toggleBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        `;
+        toggleBtn.title = "Open Display Settings";
+        toggleBtn.style.cssText = `
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9998;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            color: #22c55e;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        toggleBtn.addEventListener("mouseenter", () => {
+            toggleBtn.style.background = "rgba(34, 197, 94, 0.3)";
+            toggleBtn.style.borderColor = "#22c55e";
+        });
+        toggleBtn.addEventListener("mouseleave", () => {
+            toggleBtn.style.background = "rgba(0, 0, 0, 0.8)";
+            toggleBtn.style.borderColor = "rgba(255, 255, 255, 0.2)";
+        });
+
+        toggleBtn.addEventListener("click", () => {
+            toggleSettingsPanel(false);
+        });
+
+        document.body.appendChild(toggleBtn);
+    }
+
+    function toggleSettingsPanel(collapse) {
+        const panel = document.getElementById("player-size-control");
+        const toggleBtn = document.getElementById("settings-toggle-btn");
+
+        if (!panel || !toggleBtn) return;
+
+        settingsPanelCollapsed = collapse;
+        localStorage.setItem("movieshows-settings-collapsed", collapse ? "true" : "false");
+
+        if (collapse) {
+            panel.style.transform = "translateX(-50%) translateY(-100px)";
+            panel.style.opacity = "0";
+            panel.style.pointerEvents = "none";
+            setTimeout(() => {
+                if (settingsPanelCollapsed) {
+                    toggleBtn.style.display = "flex";
+                }
+            }, 300);
+        } else {
+            toggleBtn.style.display = "none";
+            panel.style.transform = "translateX(-50%) translateY(0)";
+            panel.style.opacity = "1";
+            panel.style.pointerEvents = "auto";
+        }
+    }
+
     // ========== PLAYER SIZE CONTROL ==========
 
     function createPlayerSizeControl() {
@@ -18,25 +97,34 @@
         const control = document.createElement("div");
         control.id = "player-size-control";
         control.innerHTML = `
-      <span style="color: #888; font-size: 11px; margin-right: 8px;">Player:</span>
-      <button data-size="small">S</button>
-      <button data-size="medium">M</button>
-      <button data-size="large" class="active">L</button>
-      <button data-size="full">Full</button>
+      <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="color: #888; font-size: 11px; margin-right: 8px;">Player:</span>
+          <button data-size="small">S</button>
+          <button data-size="medium" class="active">M</button>
+          <button data-size="large">L</button>
+          <button data-size="full">Full</button>
+      </div>
     `;
 
         document.body.appendChild(control);
 
-        const savedSize = localStorage.getItem("movieshows-player-size") || "large";
+        // Default to medium if not set
+        const savedSize = localStorage.getItem("movieshows-player-size") || "medium";
         setPlayerSize(savedSize);
 
-        control.querySelectorAll("button").forEach((btn) => {
+        control.querySelectorAll("button[data-size]").forEach((btn) => {
             btn.addEventListener("click", () => {
                 const size = btn.dataset.size;
                 setPlayerSize(size);
                 localStorage.setItem("movieshows-player-size", size);
             });
         });
+
+        // Check if panel should be collapsed
+        const savedCollapsed = localStorage.getItem("movieshows-settings-collapsed") === "true";
+        if (savedCollapsed) {
+            setTimeout(() => toggleSettingsPanel(true), 500);
+        }
     }
 
     function findCarouselElement() {
@@ -127,10 +215,14 @@
       <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
           <button data-action="toggle-carousel" class="active" style="width:100%;">Bar: Show</button>
       </div>
-      <div style="display: flex; align-items: center; gap: 4px;">
+      <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
           <span style="color: #888; font-size: 11px; margin-right: 2px;">Dtl:</span>
           <button data-detail="full" class="active">Full</button>
           <button data-detail="title">Title</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; margin-top: 4px;">
+          <button id="collapse-settings-btn" style="width: 100%; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #ef4444;">▲ Collapse Panel</button>
+      </div>
     `;
 
         const container = document.getElementById("player-size-control");
@@ -184,6 +276,14 @@
             document.getElementById('adj-down').addEventListener('click', () => { currentOffsetY -= 10; updateOffset(); });
             document.getElementById('adj-left').addEventListener('click', () => { currentOffsetX -= 10; updateOffset(); });
             document.getElementById('adj-right').addEventListener('click', () => { currentOffsetX += 10; updateOffset(); });
+
+            // Collapse Button
+            const collapseBtn = document.getElementById('collapse-settings-btn');
+            if (collapseBtn) {
+                collapseBtn.addEventListener('click', () => {
+                    toggleSettingsPanel(true);
+                });
+            }
         } else {
             document.body.appendChild(control);
         }
@@ -495,7 +595,7 @@
         style.textContent = `
       /* ... (previous styles) ... */
       
-      /* Player size control */
+      /* Player size control - Collapsible Panel */
       #player-size-control {
         position: fixed;
         top: 8px;
@@ -503,14 +603,51 @@
         transform: translateX(-50%);
         z-index: 9999;
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
         gap: 6px;
-        background: rgba(0, 0, 0, 0.9);
-        padding: 8px 16px;
+        background: rgba(0, 0, 0, 0.95);
+        padding: 12px 16px;
         border-radius: 12px;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.15);
         font-family: sans-serif;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        min-width: 280px;
+      }
+      
+      /* Settings Toggle Button */
+      #settings-toggle-btn {
+        animation: pulse-glow 2s ease-in-out infinite;
+      }
+      
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+        50% { box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4); }
+      }
+      
+      /* Trailer Switcher */
+      .trailer-switcher {
+        backdrop-filter: blur(10px);
+        animation: fadeIn 0.3s ease;
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      /* Play button styling */
+      .play-movie-btn {
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .play-movie-btn:hover svg {
+        transform: scale(1.2);
+        color: #fbbf24;
       }
       
       #layout-control button, #player-size-control button {
@@ -757,7 +894,7 @@
                 </div>
                 <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 pointer-events-none z-20"></div>
                 
-                <!-- Right Action Buttons (Simplified) -->
+                <!-- Right Action Buttons -->
                 <div class="absolute right-4 bottom-20 flex flex-col items-center gap-4 z-30 pointer-events-auto">
                     <button class="flex flex-col items-center gap-1 group">
                          <div class="p-3 rounded-full bg-black/40 backdrop-blur-sm transition-all duration-200 group-hover:bg-black/60">
@@ -776,6 +913,12 @@
                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-share2 w-8 h-8 text-white"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg>
                         </div>
                         <span class="text-xs font-semibold drop-shadow-md text-white">Share</span>
+                    </button>
+                    <button class="trailer-switch-btn flex flex-col items-center gap-1 group" data-movie-title="${movie.title}">
+                        <div class="p-3 rounded-full bg-amber-500/40 backdrop-blur-sm transition-all duration-200 group-hover:bg-amber-500/60">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-white"><path d="M17 3H7a5 5 0 0 0-5 5v10.5"/><path d="M22 8.5V9a5 5 0 0 1-5 5H8"/><path d="m22 2-5 5"/><path d="m2 22 5-5"/><path d="M9 12v10"/><path d="M6.5 19H22"/></svg>
+                        </div>
+                        <span class="text-xs font-semibold drop-shadow-md text-white">Switch</span>
                     </button>
                 </div>
 
@@ -834,7 +977,7 @@
                 scrollToSlide(videoSlides.length - 1);
 
                 // Force player size application on new slide
-                const size = localStorage.getItem("movieshows-player-size") || "large";
+                const size = localStorage.getItem("movieshows-player-size") || "medium";
                 applyPlayerSize(size);
 
                 // FORCE PLAY: bypass observer delay
@@ -1057,7 +1200,7 @@
                 isScrolling = false;
                 currentIndex = getCurrentVisibleIndex();
                 // Re-apply player size after scroll
-                const size = localStorage.getItem("movieshows-player-size") || "large";
+                const size = localStorage.getItem("movieshows-player-size") || "medium";
                 setTimeout(() => applyPlayerSize(size), 100);
             }, SCROLL_COOLDOWN);
         }
@@ -1188,7 +1331,7 @@
             for (const mutation of mutations) {
                 if (mutation.addedNodes.length) {
                     const size =
-                        localStorage.getItem("movieshows-player-size") || "large";
+                        localStorage.getItem("movieshows-player-size") || "medium";
                     setTimeout(() => applyPlayerSize(size), 200);
 
                     // Also observe new iframes for playback control
@@ -1238,6 +1381,249 @@
         });
     }
 
+    // ========== IMAGE FALLBACK HANDLING ==========
+
+    const FALLBACK_POSTER_SOURCES = [
+        (title) => `https://image.tmdb.org/t/p/w500/${encodeURIComponent(title.replace(/[^a-zA-Z0-9]/g, '').toLowerCase())}.jpg`,
+        (title) => `https://via.placeholder.com/500x750/1a1a1a/ffffff?text=${encodeURIComponent(title)}`,
+    ];
+
+    function setupImageFallback() {
+        // Handle image errors globally
+        document.addEventListener('error', (e) => {
+            if (e.target.tagName === 'IMG') {
+                const img = e.target;
+                const title = img.alt || 'Movie';
+                
+                // Skip if already tried fallback
+                if (img.dataset.fallbackTried) return;
+                img.dataset.fallbackTried = 'true';
+                
+                console.log(`[MovieShows] Image failed to load: ${img.src}, using fallback for "${title}"`);
+                
+                // Use placeholder with movie title
+                img.src = `https://via.placeholder.com/500x750/1a1a1a/ffffff?text=${encodeURIComponent(title.substring(0, 20))}`;
+                img.style.objectFit = 'contain';
+            }
+        }, true);
+
+        // Proactively check images
+        const checkImages = () => {
+            document.querySelectorAll('img[src*="tmdb.org"]').forEach(img => {
+                if (img.complete && img.naturalHeight === 0 && !img.dataset.fallbackTried) {
+                    const title = img.alt || 'Movie';
+                    img.dataset.fallbackTried = 'true';
+                    img.src = `https://via.placeholder.com/500x750/1a1a1a/ffffff?text=${encodeURIComponent(title.substring(0, 20))}`;
+                }
+            });
+        };
+        
+        setTimeout(checkImages, 2000);
+        setInterval(checkImages, 5000);
+    }
+
+    // ========== PLAY BUTTON FUNCTIONALITY ==========
+
+    function setupPlayButtons() {
+        // Add click handlers to carousel items and trailer switch buttons
+        document.addEventListener('click', (e) => {
+            const playButton = e.target.closest('.play-movie-btn');
+            const trailerSwitchBtn = e.target.closest('.trailer-switch-btn');
+            const carouselItem = e.target.closest('[data-movie-title]:not(.trailer-switch-btn)');
+            
+            // Handle trailer switch button
+            if (trailerSwitchBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const title = trailerSwitchBtn.dataset.movieTitle;
+                const slide = trailerSwitchBtn.closest('.snap-center');
+                if (title && slide) {
+                    toggleTrailerSwitcher(slide, title);
+                }
+                return;
+            }
+            
+            if (playButton) {
+                e.preventDefault();
+                e.stopPropagation();
+                const title = playButton.dataset.movieTitle;
+                if (title) {
+                    playMovieByTitle(title);
+                }
+                return;
+            }
+            
+            // Handle click on carousel movie posters
+            if (carouselItem && !e.target.closest('.trailer-switcher')) {
+                const title = carouselItem.dataset.movieTitle;
+                if (title) {
+                    playMovieByTitle(title);
+                }
+            }
+        }, true);
+        
+        // Toggle trailer switcher visibility
+        function toggleTrailerSwitcher(slide, movieTitle) {
+            let switcher = slide.querySelector('.trailer-switcher');
+            
+            if (switcher) {
+                // Toggle visibility
+                if (switcher.style.display === 'none') {
+                    switcher.style.display = 'block';
+                } else {
+                    switcher.style.display = 'none';
+                }
+            } else {
+                // Create switcher
+                addTrailerSwitcher(slide, movieTitle);
+            }
+        }
+
+        // Add play buttons to carousel items
+        const addPlayButtonsToCarousel = () => {
+            const carouselItems = document.querySelectorAll('.flex-shrink-0.w-28:not([data-play-btn-added])');
+            carouselItems.forEach(item => {
+                item.dataset.playBtnAdded = 'true';
+                const img = item.querySelector('img');
+                const title = img?.alt;
+                
+                if (title) {
+                    item.dataset.movieTitle = title;
+                    
+                    // Add play button overlay
+                    const overlay = item.querySelector('.absolute.inset-0.bg-gradient-to-t');
+                    if (overlay) {
+                        const playBtn = document.createElement('button');
+                        playBtn.className = 'play-movie-btn absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity';
+                        playBtn.dataset.movieTitle = title;
+                        playBtn.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-amber-500 drop-shadow-lg">
+                                <path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"></path>
+                                <circle cx="12" cy="12" r="10"></circle>
+                            </svg>
+                        `;
+                        playBtn.style.cssText = 'background: rgba(0,0,0,0.5); z-index: 10;';
+                        item.appendChild(playBtn);
+                    }
+                }
+            });
+        };
+        
+        setTimeout(addPlayButtonsToCarousel, 1000);
+        setInterval(addPlayButtonsToCarousel, 3000);
+    }
+
+    function playMovieByTitle(title) {
+        console.log(`[MovieShows] Play button clicked for: "${title}"`);
+        
+        // First check if movie is in the current feed
+        const slideIndex = videoSlides.findIndex(slide => {
+            const h2 = slide.querySelector('h2');
+            return h2 && h2.textContent.toLowerCase().includes(title.toLowerCase());
+        });
+        
+        if (slideIndex !== -1) {
+            console.log(`[MovieShows] Found in feed at index ${slideIndex}, scrolling...`);
+            scrollToSlide(slideIndex);
+            showToast(`Playing: ${title}`);
+            return;
+        }
+        
+        // Otherwise load from database
+        let movie = allMoviesData.find(m => 
+            m.title.toLowerCase().includes(title.toLowerCase()) || 
+            title.toLowerCase().includes(m.title.toLowerCase())
+        );
+        
+        if (movie) {
+            showToast(`Playing: ${movie.title}`);
+            addMovieToFeed(movie, true);
+        } else {
+            showToast(`Could not find "${title}"`, true);
+        }
+    }
+
+    // ========== TRAILER SWITCHING ==========
+
+    const alternativeTrailers = {
+        "Avatar: Fire and Ash": [
+            { name: "A Deeper World", url: "https://www.youtube.com/watch?v=d9My665987w" },
+            { name: "Epic Wars", url: "https://www.youtube.com/watch?v=5PSNL1qE6VY" },
+            { name: "War Is Here", url: "https://www.youtube.com/watch?v=F5Q8EPBH7B4" }
+        ],
+        "Toy Story 5": [
+            { name: "Official Trailer", url: "https://www.youtube.com/watch?v=wmiIUN-7qhE" },
+            { name: "Teaser", url: "https://www.youtube.com/watch?v=dxXJAqOU00g" }
+        ],
+        "Zootopia 2": [
+            { name: "Final Trailer", url: "https://www.youtube.com/watch?v=k8t8rvRO7Ug" },
+            { name: "Coming to Digital", url: "https://www.youtube.com/watch?v=XDV2PtH8jYA" }
+        ],
+        "Scream 7": [
+            { name: "Official Teaser", url: "https://www.youtube.com/watch?v=UJrghaPJ0RY" }
+        ]
+    };
+
+    function addTrailerSwitcher(slide, movieTitle) {
+        if (slide.querySelector('.trailer-switcher')) return;
+        
+        const trailers = alternativeTrailers[movieTitle];
+        if (!trailers || trailers.length <= 1) return;
+        
+        const switcher = document.createElement('div');
+        switcher.className = 'trailer-switcher';
+        switcher.style.cssText = `
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+        `;
+        
+        const label = document.createElement('span');
+        label.textContent = 'Switch Trailer:';
+        label.style.cssText = 'color: #888; font-size: 10px; display: block; margin-bottom: 4px;';
+        switcher.appendChild(label);
+        
+        trailers.forEach((trailer, idx) => {
+            const btn = document.createElement('button');
+            btn.textContent = trailer.name;
+            btn.style.cssText = `
+                display: block;
+                width: 100%;
+                padding: 6px 12px;
+                margin-top: 4px;
+                background: ${idx === 0 ? '#22c55e' : 'rgba(255,255,255,0.1)'};
+                color: ${idx === 0 ? 'black' : 'white'};
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 11px;
+                text-align: left;
+            `;
+            btn.addEventListener('click', () => {
+                const iframe = slide.querySelector('iframe');
+                if (iframe) {
+                    const newUrl = getYouTubeEmbedUrl(trailer.url);
+                    iframe.src = newUrl;
+                    showToast(`Switched to: ${trailer.name}`);
+                    
+                    // Update button styles
+                    switcher.querySelectorAll('button').forEach((b, i) => {
+                        b.style.background = i === idx ? '#22c55e' : 'rgba(255,255,255,0.1)';
+                        b.style.color = i === idx ? 'black' : 'white';
+                    });
+                }
+            });
+            switcher.appendChild(btn);
+        });
+        
+        slide.appendChild(switcher);
+    }
+
     function init() {
         if (initialized) return;
 
@@ -1246,9 +1632,12 @@
         injectStyles();
         setupVideoObserver(); // Add this line
         setupIframeObserver();
+        createSettingsToggleButton();
         createPlayerSizeControl();
         createLayoutControl();
         setupCarouselInteractions();
+        setupImageFallback();
+        setupPlayButtons();
 
         // START LOADING DATA
         loadMoviesData();
@@ -1283,8 +1672,8 @@
         // Setup observer to apply size when iframes load
         setupIframeObserver();
 
-        // Apply initial player size
-        const savedSize = localStorage.getItem("movieshows-player-size") || "large";
+        // Apply initial player size (default to medium)
+        const savedSize = localStorage.getItem("movieshows-player-size") || "medium";
         setTimeout(() => applyPlayerSize(savedSize), 500);
 
         // Auto-click play queue
