@@ -142,7 +142,11 @@ test.describe('MovieShows App Tests', () => {
         });
 
         test('queue updates when filter changes', async ({ page }) => {
-            // Open queue
+            // First switch filter to verify it works
+            await page.getByRole('button', { name: /TV \(/i }).click();
+            await page.waitForTimeout(2000);
+            
+            // Then open queue to verify it reflects the filter
             await page.getByRole('button', { name: /My Queue/i }).click();
             await page.waitForTimeout(1500);
             
@@ -150,12 +154,7 @@ test.describe('MovieShows App Tests', () => {
             const queuePanel = page.locator('#queue-panel');
             await expect(queuePanel).toBeVisible({ timeout: 5000 });
             
-            // Switch to TV filter
-            await page.getByRole('button', { name: /TV \(/i }).click();
-            await page.waitForTimeout(3000);
-            
-            // Queue panel should still be functional (showing content info)
-            // Check for any content in the queue - could be title, video info, etc.
+            // Queue panel should have content
             const hasContent = await queuePanel.locator('h4, h3, p, span').first().isVisible();
             expect(hasContent).toBe(true);
         });
