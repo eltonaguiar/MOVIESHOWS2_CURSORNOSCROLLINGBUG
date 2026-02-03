@@ -566,8 +566,13 @@
         
         // Build the panel HTML
         content.innerHTML = `
-            <!-- View Mode Toggle -->
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+            <!-- View Mode Toggle + Resync -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <button id="queue-resync-btn" style="
+                    padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
+                    background: rgba(59, 130, 246, 0.2); color: #3b82f6;
+                    transition: all 0.2s; display: flex; align-items: center; gap: 4px;
+                " title="Resync queue with current video">🔄 Resync</button>
                 <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px;">
                     <button id="queue-view-thumbnail" style="
                         padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
@@ -697,6 +702,21 @@
                 }
             </style>
         `;
+        
+        // Add handler for resync button
+        content.querySelector("#queue-resync-btn")?.addEventListener("click", () => {
+            console.log('[MovieShows] Manual resync triggered');
+            // Force refresh everything
+            videoSlides = findVideoSlides();
+            currentIndex = getCurrentVisibleIndex();
+            // Stop all videos and play only the visible one
+            forceStopAllVideos();
+            setTimeout(() => {
+                forcePlayVisibleVideos();
+                updateQueuePanel();
+                showToast('Queue resynced!');
+            }, 100);
+        });
         
         // Add handlers for view mode toggle
         content.querySelector("#queue-view-thumbnail")?.addEventListener("click", () => {
@@ -2222,19 +2242,39 @@
         return queuePanel && (queuePanel.style.right === '0' || queuePanel.style.right === '0px');
     }
     
+    // Debounce timer for scroll end detection
+    let scrollEndTimer = null;
+    let lastScrollTime = 0;
+    
     function handleScroll() {
         if (isScrolling) return;
+        
+        lastScrollTime = Date.now();
 
         const newIndex = getCurrentVisibleIndex();
         if (newIndex !== currentIndex) {
             currentIndex = newIndex;
             checkInfiniteScroll(); // Check if we need more content
-            // Switch to the new video
-            forcePlayVisibleVideos();
-            // Update queue panel to reflect current position
-            if (isQueuePanelOpen()) {
-                updateQueuePanel();
-            }
+            // Switch to the new video - stop all first to prevent multiple playing
+            forceStopAllVideos();
+            setTimeout(() => forcePlayVisibleVideos(), 50);
+        }
+        
+        // Always update queue panel on scroll (debounced)
+        if (isQueuePanelOpen()) {
+            // Clear previous timer
+            if (scrollEndTimer) clearTimeout(scrollEndTimer);
+            // Set new timer to update after scrolling stops
+            scrollEndTimer = setTimeout(() => {
+                console.log('[MovieShows] Scroll ended - syncing queue');
+                videoSlides = findVideoSlides();
+                currentIndex = getCurrentVisibleIndex();
+                forceStopAllVideos();
+                setTimeout(() => {
+                    forcePlayVisibleVideos();
+                    updateQueuePanel();
+                }, 100);
+            }, 150); // 150ms after scroll stops
         }
     }
 
@@ -2498,6 +2538,23 @@
         }
     }
     
+    // Force stop ALL videos - used to fix multiple videos playing
+    function forceStopAllVideos() {
+        console.log('[MovieShows] Force stopping ALL videos');
+        const allIframes = document.querySelectorAll('iframe');
+        let stoppedCount = 0;
+        allIframes.forEach(iframe => {
+            const src = iframe.getAttribute('src');
+            if (src && src !== '' && src.includes('youtube')) {
+                iframe.setAttribute('src', '');
+                stoppedCount++;
+            }
+        });
+        currentlyPlayingIframe = null;
+        currentlyPlayingTitle = null;
+        console.log(`[MovieShows] Stopped ${stoppedCount} videos`);
+    }
+    
     function getCurrentSlideTitle() {
         if (videoSlides.length === 0 || currentIndex < 0 || currentIndex >= videoSlides.length) {
             return null;
@@ -2666,29 +2723,41 @@
     }
     
     function forcePlayVisibleVideos() {
-        // Find the currently visible slide based on scroll position
-        const allIframes = document.querySelectorAll('iframe[data-src]');
-        console.log(`[MovieShows] forcePlayVisibleVideos - Found ${allIframes.length} iframes`);
+        // CRITICAL: Stop ALL YouTube iframes first (not just data-src ones)
+        const allYouTubeIframes = document.querySelectorAll('iframe[src*="youtube"], iframe[data-src*="youtube"]');
+        console.log(`[MovieShows] forcePlayVisibleVideos - Stopping ${allYouTubeIframes.length} YouTube iframes first`);
         
-        if (allIframes.length === 0) {
-            console.log("[MovieShows] WARNING: No iframes found with data-src!");
-            return;
-        }
-        
-        // First, pause ALL videos
-        allIframes.forEach((iframe, index) => {
+        allYouTubeIframes.forEach(iframe => {
             const src = iframe.getAttribute('src');
             if (src && src !== '') {
                 iframe.setAttribute('src', '');
             }
         });
         
+        // Reset playing state
+        currentlyPlayingIframe = null;
+        currentlyPlayingTitle = null;
+        
+        // Find iframes with data-src (lazy loaded)
+        const lazyIframes = document.querySelectorAll('iframe[data-src]');
+        console.log(`[MovieShows] forcePlayVisibleVideos - Found ${lazyIframes.length} lazy iframes`);
+        
+        if (lazyIframes.length === 0) {
+            console.log("[MovieShows] WARNING: No iframes found with data-src!");
+            return;
+        }
+        
         // Find which iframe is most visible (based on currentIndex or viewport)
         let targetIframe = null;
         
+        // Refresh videoSlides and currentIndex
+        videoSlides = findVideoSlides();
+        const actualIndex = getCurrentVisibleIndex();
+        currentIndex = actualIndex;
+        
         // Try to use currentIndex first
-        if (currentIndex >= 0 && currentIndex < allIframes.length) {
-            targetIframe = allIframes[currentIndex];
+        if (actualIndex >= 0 && actualIndex < lazyIframes.length) {
+            targetIframe = lazyIframes[actualIndex];
         }
         
         // Fallback: find the most centered iframe
@@ -2696,7 +2765,7 @@
             let bestMatch = null;
             let bestScore = -Infinity;
             
-            allIframes.forEach((iframe, index) => {
+            lazyIframes.forEach((iframe, index) => {
                 const rect = iframe.getBoundingClientRect();
                 const centerY = rect.top + rect.height / 2;
                 const viewportCenterY = window.innerHeight / 2;
@@ -2709,11 +2778,13 @@
                 }
             });
             
-            targetIframe = bestMatch || allIframes[0];
+            targetIframe = bestMatch || lazyIframes[0];
         }
         
         // Play only the target iframe
         if (targetIframe) {
+            const movieTitle = targetIframe.getAttribute('data-movie-title') || 'Unknown';
+            console.log(`[MovieShows] Playing ONLY: "${movieTitle}"`);
             playVideo(targetIframe);
         }
     }
