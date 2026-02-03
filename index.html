@@ -18,31 +18,64 @@
     <link rel="preload" as="image" href="https://image.tmdb.org/t/p/w500/iOb2fjXLbpJgyQXe46n1WtGCnaa.jpg" />
     <link rel="preload" as="image" href="https://image.tmdb.org/t/p/w500/8WUV2HFQlN5cEs6Ebkksj6F4bT.jpg" />
     <link rel="preload" as="image" href="https://image.tmdb.org/t/p/w500/jjyuk0edLiW8vOSnlfwWCCLpbh5.jpg" />
-    <link rel="stylesheet" href="/MOVIESHOWS/_next/static/chunks/bedb993eab73d440.css" data-precedence="next" onerror="this.onerror=null;this.href='https://cdn.tailwindcss.com';" />
-    <!-- Tailwind CSS CDN fallback -->
+    <!-- Tailwind CSS CDN with JIT support -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: { 900: '#18181b', 950: '#09090b' },
+                        amber: { 400: '#fbbf24', 500: '#f59e0b' },
+                        cyan: { 400: '#22d3ee', 500: '#06b6d4' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .bg-black\/40 { background-color: rgba(0, 0, 0, 0.4); }
+            .bg-black\/60 { background-color: rgba(0, 0, 0, 0.6); }
+            .bg-black\/80 { background-color: rgba(0, 0, 0, 0.8); }
+            .bg-white\/5 { background-color: rgba(255, 255, 255, 0.05); }
+            .bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
+            .bg-white\/20 { background-color: rgba(255, 255, 255, 0.2); }
+            .border-white\/5 { border-color: rgba(255, 255, 255, 0.05); }
+            .border-white\/10 { border-color: rgba(255, 255, 255, 0.1); }
+            .border-white\/20 { border-color: rgba(255, 255, 255, 0.2); }
+            .text-white\/40 { color: rgba(255, 255, 255, 0.4); }
+            .z-\[60\] { z-index: 60; }
+            .z-\[100\] { z-index: 100; }
+            .z-\[200\] { z-index: 200; }
+            .z-\[250\] { z-index: 250; }
+            .top-\[85vh\] { top: 85vh; }
+            .h-\[60vh\] { height: 60vh; }
+            .backdrop-blur-xl { backdrop-filter: blur(24px); }
+            .backdrop-blur-md { backdrop-filter: blur(12px); }
+            .backdrop-blur-sm { backdrop-filter: blur(4px); }
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        }
+    </style>
     <style>
-        /* Critical fallback styles if CSS fails to load */
-        body { background-color: #000; color: #fff; font-family: system-ui, -apple-system, sans-serif; }
-        .bg-black { background-color: #000 !important; }
-        .text-white { color: #fff !important; }
-        .fixed { position: fixed !important; }
-        .absolute { position: absolute !important; }
-        .relative { position: relative !important; }
-        .flex { display: flex !important; }
-        .hidden { display: none !important; }
-        .overflow-hidden { overflow: hidden !important; }
-        .z-10 { z-index: 10 !important; }
-        .z-20 { z-index: 20 !important; }
-        .z-30 { z-index: 30 !important; }
-        .z-40 { z-index: 40 !important; }
-        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
-        .w-full { width: 100% !important; }
-        .h-full { height: 100% !important; }
-        .h-screen { height: 100vh !important; }
+        /* Critical fallback styles */
+        body { background-color: #000; color: #fff; font-family: system-ui, -apple-system, sans-serif; margin: 0; }
+        .bg-zinc-900 { background-color: #18181b !important; }
+        .bg-zinc-950 { background-color: #09090b !important; }
+        .bg-gradient-to-t { background: linear-gradient(to top, var(--tw-gradient-stops)); }
+        .bg-gradient-to-b { background: linear-gradient(to bottom, var(--tw-gradient-stops)); }
+        .from-black { --tw-gradient-from: #000; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+        .via-black\/80 { --tw-gradient-via: rgba(0,0,0,0.8); }
+        .to-transparent { --tw-gradient-to: transparent; }
+        .group\/player:hover .group-hover\/player\:opacity-100 { opacity: 1; }
         .snap-y { scroll-snap-type: y mandatory; }
         .snap-center { scroll-snap-align: center; }
+        .snap-mandatory { scroll-snap-type: y mandatory; }
         .overflow-y-scroll { overflow-y: scroll; }
+        .pointer-events-none { pointer-events: none; }
+        .pointer-events-auto { pointer-events: auto; }
+        iframe { border: none; }
     </style>
     <link rel="preload" as="script" fetchPriority="low" href="/MOVIESHOWS/_next/static/chunks/06ac42a4f7bb5dfe.js" />
     <script src="/MOVIESHOWS/_next/static/chunks/da42d1a8dab68e4b.js" async=""></script>
