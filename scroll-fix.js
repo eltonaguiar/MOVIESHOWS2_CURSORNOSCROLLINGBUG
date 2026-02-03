@@ -25,40 +25,69 @@
         
         const btn = document.createElement("button");
         btn.id = "mute-control";
-        btn.innerHTML = isMuted ? "🔇 Unmute" : "🔊 Muted";
+        
+        const updateMuteButton = () => {
+            if (isMuted) {
+                btn.innerHTML = "🔇 Click to Unmute";
+                btn.style.background = "rgba(239, 68, 68, 0.9)"; // Red when muted
+                btn.style.borderColor = "#ef4444";
+            } else {
+                btn.innerHTML = "🔊 Sound On";
+                btn.style.background = "rgba(34, 197, 94, 0.9)"; // Green when unmuted
+                btn.style.borderColor = "#22c55e";
+            }
+        };
+        
         btn.style.cssText = `
             position: fixed;
             bottom: 20px;
             left: 20px;
             z-index: 10000;
-            background: rgba(0, 0, 0, 0.8);
             color: white;
-            border: 2px solid #22c55e;
-            padding: 12px 20px;
+            border: 2px solid #ef4444;
+            padding: 14px 24px;
             border-radius: 25px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
             font-weight: bold;
             backdrop-filter: blur(10px);
             transition: all 0.2s;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            animation: ${isMuted ? 'pulse-mute 2s infinite' : 'none'};
         `;
         
+        // Add pulse animation for muted state
+        if (!document.getElementById("mute-animation-style")) {
+            const style = document.createElement("style");
+            style.id = "mute-animation-style";
+            style.textContent = `
+                @keyframes pulse-mute {
+                    0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+                    50% { transform: scale(1.05); box-shadow: 0 4px 25px rgba(239, 68, 68, 0.6); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        updateMuteButton();
+        
         btn.addEventListener("mouseenter", () => {
-            btn.style.background = "rgba(34, 197, 94, 0.9)";
-            btn.style.transform = "scale(1.05)";
+            btn.style.transform = "scale(1.08)";
         });
         btn.addEventListener("mouseleave", () => {
-            btn.style.background = "rgba(0, 0, 0, 0.8)";
-            btn.style.transform = "scale(1)";
+            btn.style.transform = isMuted ? "" : "scale(1)";
         });
         
         btn.addEventListener("click", () => {
             isMuted = !isMuted;
             localStorage.setItem("movieshows-muted", isMuted ? "true" : "false");
-            btn.innerHTML = isMuted ? "🔇 Unmute" : "🔊 Muted";
+            updateMuteButton();
+            btn.style.animation = isMuted ? 'pulse-mute 2s infinite' : 'none';
             applyMuteStateToAllVideos();
             console.log(`[MovieShows] Sound ${isMuted ? 'muted' : 'unmuted'}`);
+            
+            // Show toast notification
+            showToast(isMuted ? "Sound muted" : "Sound enabled!");
         });
         
         document.body.appendChild(btn);
@@ -712,8 +741,47 @@
 
     // ========== PLAYER SIZE CONTROL ==========
 
+    let settingsCollapsed = localStorage.getItem("movieshows-settings-collapsed") === "true";
+    
     function createPlayerSizeControl() {
         if (document.getElementById("player-size-control")) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.id = "player-size-wrapper";
+        wrapper.style.cssText = `
+            position: fixed;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        `;
+        
+        // Toggle button to show/hide settings
+        const toggleBtn = document.createElement("button");
+        toggleBtn.id = "settings-toggle";
+        toggleBtn.innerHTML = settingsCollapsed ? "⚙️ Settings" : "✕ Hide";
+        toggleBtn.style.cssText = `
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+        `;
+        toggleBtn.addEventListener("mouseenter", () => {
+            toggleBtn.style.background = "rgba(34, 197, 94, 0.8)";
+        });
+        toggleBtn.addEventListener("mouseleave", () => {
+            toggleBtn.style.background = "rgba(0, 0, 0, 0.7)";
+        });
 
         const control = document.createElement("div");
         control.id = "player-size-control";
@@ -724,8 +792,28 @@
       <button data-size="large" class="active">L</button>
       <button data-size="full">Full</button>
     `;
-
-        document.body.appendChild(control);
+        
+        // Apply collapsed state
+        if (settingsCollapsed) {
+            control.style.display = "none";
+        }
+        
+        toggleBtn.addEventListener("click", () => {
+            settingsCollapsed = !settingsCollapsed;
+            localStorage.setItem("movieshows-settings-collapsed", settingsCollapsed ? "true" : "false");
+            control.style.display = settingsCollapsed ? "none" : "";
+            toggleBtn.innerHTML = settingsCollapsed ? "⚙️ Settings" : "✕ Hide";
+            
+            // Also hide/show the layout control
+            const layoutControl = document.getElementById("layout-control");
+            if (layoutControl) {
+                layoutControl.style.display = settingsCollapsed ? "none" : "";
+            }
+        });
+        
+        wrapper.appendChild(toggleBtn);
+        wrapper.appendChild(control);
+        document.body.appendChild(wrapper);
 
         const savedSize = localStorage.getItem("movieshows-player-size") || "large";
         setPlayerSize(savedSize);
@@ -1197,11 +1285,6 @@
       
       /* Player size control */
       #player-size-control {
-        position: fixed;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 9999;
         display: flex;
         align-items: center;
         gap: 6px;
@@ -1211,6 +1294,9 @@
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.15);
         font-family: sans-serif;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 90vw;
       }
       
       #layout-control button, #player-size-control button {
