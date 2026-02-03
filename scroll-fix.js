@@ -521,19 +521,43 @@
         if (!queuePanel) return;
         const content = queuePanel.querySelector(".panel-content");
         
-        // Get currently playing movies from the feed
+        // CRITICAL: Refresh videoSlides and get the ACTUAL visible index
+        videoSlides = findVideoSlides();
+        const actualVisibleIndex = getCurrentVisibleIndex();
+        currentIndex = actualVisibleIndex; // Sync currentIndex
+        
+        // Get the actual visible slide's title from the DOM (what user sees)
+        let nowPlayingTitle = 'Unknown';
+        if (videoSlides[actualVisibleIndex]) {
+            const visibleSlide = videoSlides[actualVisibleIndex];
+            nowPlayingTitle = visibleSlide.dataset?.movieTitle || 
+                              visibleSlide.querySelector('h2')?.textContent || 
+                              'Unknown';
+        }
+        
+        // Build playlist with deduplication
+        const seenTitles = new Set();
         const currentPlaylist = [];
         videoSlides.forEach((slide, idx) => {
             const title = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
-            const iframe = slide.querySelector('iframe');
             const posterUrl = slide.querySelector('img')?.src || null;
-            currentPlaylist.push({
-                title,
-                index: idx,
-                isPlaying: idx === currentIndex,
-                posterUrl
-            });
+            
+            // Only add if not seen before (deduplicate)
+            if (!seenTitles.has(title)) {
+                seenTitles.add(title);
+                currentPlaylist.push({
+                    title,
+                    index: idx,
+                    isPlaying: idx === actualVisibleIndex,
+                    posterUrl
+                });
+            }
         });
+        
+        // Get "Up Next" items - deduplicated and excluding current
+        const upNextItems = currentPlaylist.filter(item => 
+            item.index > actualVisibleIndex && item.title !== nowPlayingTitle
+        ).slice(0, 5);
         
         // Build the panel HTML
         content.innerHTML = `
@@ -544,18 +568,16 @@
                     Now Playing
                 </h3>
                 <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3);">
-                    ${currentPlaylist[currentIndex] ? `
-                        <h4 style="color: white; font-size: 16px; margin: 0;">${currentPlaylist[currentIndex].title}</h4>
-                        <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${currentIndex + 1} of ${currentPlaylist.length}</p>
-                    ` : '<p style="color: #888;">No video playing</p>'}
+                    <h4 style="color: white; font-size: 16px; margin: 0;">${nowPlayingTitle}</h4>
+                    <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${actualVisibleIndex + 1} of ${videoSlides.length}</p>
                 </div>
             </div>
             
             <!-- Up Next Section -->
             <div style="margin-bottom: 20px;">
-                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, currentPlaylist.length - currentIndex - 1)} videos)</h3>
+                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, videoSlides.length - actualVisibleIndex - 1)} videos)</h3>
                 <div id="up-next-items" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
-                    ${currentPlaylist.slice(currentIndex + 1, currentIndex + 6).map((item, i) => `
+                    ${upNextItems.map((item, i) => `
                         <div class="up-next-item" data-index="${item.index}" style="
                             display: flex; gap: 10px; padding: 8px; background: rgba(255,255,255,0.03);
                             border-radius: 8px; cursor: pointer; transition: all 0.2s;
@@ -1911,13 +1933,16 @@
 
         console.log(`[MovieShows] Adding movie to feed: ${movie.title} (Scroll: ${scrollAfter}, LoadNow: ${loadImmediately})`);
 
-        // Prevent strictly adjacent duplicates, but allow repeats eventually
-        const lastSlide = videoSlides[videoSlides.length - 1];
-        if (lastSlide) {
-            const h2 = lastSlide.querySelector('h2');
-            // Allow re-adding if forced (e.g. from carousel click)
-            if (!scrollAfter && h2 && h2.textContent === movie.title) {
-                console.log("[MovieShows] Skipped adding duplicate (adjacent)");
+        // Check for duplicates in the entire feed (unless forced scroll which means user clicked)
+        if (!scrollAfter) {
+            const existingTitles = new Set();
+            videoSlides.forEach(slide => {
+                const h2 = slide.querySelector('h2');
+                if (h2) existingTitles.add(h2.textContent);
+            });
+            
+            if (existingTitles.has(movie.title)) {
+                console.log(`[MovieShows] Skipped adding duplicate: ${movie.title}`);
                 return;
             }
         }
