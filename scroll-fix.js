@@ -502,91 +502,135 @@
     }
     
     function setupNavigationHandlers() {
-        // Use event delegation on document body for navigation buttons
-        document.body.addEventListener("click", (e) => {
-            const btn = e.target.closest("button");
-            if (!btn) return;
+        // Find nav buttons directly and add click handlers
+        const findAndSetupNavButtons = () => {
+            const allButtons = document.querySelectorAll("button");
             
-            const btnText = btn.textContent?.trim().toLowerCase() || "";
-            const btnName = btn.getAttribute("aria-label")?.toLowerCase() || btn.getAttribute("name")?.toLowerCase() || "";
-            
-            // Search & Browse button
-            if (btnText.includes("search") || btnName.includes("search")) {
-                e.preventDefault();
-                e.stopPropagation();
-                const panel = createSearchPanel();
-                openPanel(panel);
-                setTimeout(() => document.getElementById("movie-search-input")?.focus(), 100);
-                return;
-            }
-            
-            // Filters button
-            if (btnText === "filters" || btnName.includes("filter")) {
-                e.preventDefault();
-                e.stopPropagation();
-                const panel = createFilterPanel();
-                openPanel(panel);
-                return;
-            }
-            
-            // My Queue button
-            if (btnText.includes("queue") && !btnText.includes("play")) {
-                e.preventDefault();
-                e.stopPropagation();
-                const panel = createQueuePanel();
-                openPanel(panel);
-                return;
-            }
-            
-            // Category buttons
-            if (btnText.includes("all (")) {
-                e.preventDefault();
-                e.stopPropagation();
-                currentFilter = 'all';
-                updateCategoryButtons();
-                showToast("Showing all content");
-                return;
-            }
-            if (btnText.includes("movies (")) {
-                e.preventDefault();
-                e.stopPropagation();
-                currentFilter = 'movies';
-                updateCategoryButtons();
-                showToast("Showing movies only");
-                return;
-            }
-            if (btnText.includes("tv (")) {
-                e.preventDefault();
-                e.stopPropagation();
-                currentFilter = 'tv';
-                updateCategoryButtons();
-                showToast("Showing TV shows only");
-                return;
-            }
-            if (btnText.includes("now playing")) {
-                e.preventDefault();
-                e.stopPropagation();
-                currentFilter = 'nowplaying';
-                updateCategoryButtons();
-                showToast("Showing now playing");
-                return;
-            }
-            
-            // List button (add to queue) - find current movie
-            if (btnText === "list" || btnText === "save") {
-                e.preventDefault();
-                e.stopPropagation();
-                const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
-                if (slide) {
-                    const title = slide.querySelector("h2")?.textContent;
-                    if (title) {
-                        const movie = allMoviesData.find(m => m.title === title);
-                        if (movie) addToQueue(movie);
-                    }
+            allButtons.forEach(btn => {
+                const text = btn.textContent?.trim().toLowerCase() || "";
+                const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
+                
+                // Skip if already handled
+                if (btn.dataset.navHandled) return;
+                
+                // Search & Browse
+                if (text.includes("search") && text.includes("browse")) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        console.log("[MovieShows] Search button clicked");
+                        const panel = createSearchPanel();
+                        openPanel(panel);
+                        setTimeout(() => document.getElementById("movie-search-input")?.focus(), 100);
+                    }, true);
+                    console.log("[MovieShows] Bound Search & Browse button");
                 }
-                return;
-            }
-        }, true);
+                
+                // Filters
+                if (text === "filters") {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        console.log("[MovieShows] Filters button clicked");
+                        const panel = createFilterPanel();
+                        openPanel(panel);
+                    }, true);
+                    console.log("[MovieShows] Bound Filters button");
+                }
+                
+                // My Queue
+                if (text.includes("my queue")) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        console.log("[MovieShows] Queue button clicked");
+                        const panel = createQueuePanel();
+                        openPanel(panel);
+                    }, true);
+                    console.log("[MovieShows] Bound My Queue button");
+                }
+                
+                // Category: All
+                if (text.match(/^all\s*\(\s*\d+\s*\)$/)) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        currentFilter = 'all';
+                        updateCategoryButtons();
+                        showToast("Showing all content");
+                    }, true);
+                }
+                
+                // Category: Movies
+                if (text.match(/^movies\s*\(\s*\d+\s*\)$/)) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        currentFilter = 'movies';
+                        updateCategoryButtons();
+                        showToast("Showing movies only");
+                    }, true);
+                }
+                
+                // Category: TV
+                if (text.match(/^tv\s*\(\s*\d+\s*\)$/)) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        currentFilter = 'tv';
+                        updateCategoryButtons();
+                        showToast("Showing TV shows only");
+                    }, true);
+                }
+                
+                // Category: Now Playing
+                if (text.match(/^now playing\s*\(\s*\d+\s*\)$/)) {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        currentFilter = 'nowplaying';
+                        updateCategoryButtons();
+                        showToast("Showing now playing");
+                    }, true);
+                }
+                
+                // List/Save button
+                if (text === "list" || text === "save") {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
+                        if (slide) {
+                            const title = slide.querySelector("h2")?.textContent;
+                            if (title) {
+                                const movie = allMoviesData.find(m => m.title === title);
+                                if (movie) addToQueue(movie);
+                            }
+                        }
+                    }, true);
+                }
+            });
+        };
+        
+        // Run immediately
+        findAndSetupNavButtons();
+        
+        // Re-run when DOM changes to catch dynamically added buttons
+        const navObserver = new MutationObserver(() => {
+            findAndSetupNavButtons();
+        });
+        navObserver.observe(document.body, { childList: true, subtree: true });
         
         // Handle Escape key to close panels
         document.addEventListener("keydown", (e) => {
