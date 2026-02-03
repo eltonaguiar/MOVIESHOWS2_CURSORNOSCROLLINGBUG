@@ -502,25 +502,39 @@
     }
     
     function setupNavigationHandlers() {
+        // Utility to get clean button text (handles nested elements)
+        const getButtonText = (btn) => {
+            // Try aria-label first
+            const ariaLabel = btn.getAttribute("aria-label");
+            if (ariaLabel) return ariaLabel.toLowerCase();
+            
+            // Try innerText which ignores SVG text
+            const innerText = btn.innerText?.trim().toLowerCase();
+            if (innerText) return innerText;
+            
+            // Fallback to textContent
+            return btn.textContent?.trim().toLowerCase() || "";
+        };
+        
         // Find nav buttons directly and add click handlers
         const findAndSetupNavButtons = () => {
             const allButtons = document.querySelectorAll("button");
             let foundCount = 0;
             
             allButtons.forEach(btn => {
-                const text = btn.textContent?.trim().toLowerCase() || "";
-                const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
+                const text = getButtonText(btn);
                 
                 // Skip if already handled
                 if (btn.dataset.navHandled) return;
                 
-                // Debug: log all button texts
-                if (!btn.dataset.navLogged) {
-                    console.log(`[MovieShows] Button text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+                // Debug: log all button texts (but only first 50 unique buttons)
+                if (!btn.dataset.navLogged && foundCount < 50) {
+                    console.log(`[MovieShows] Button: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`);
                     btn.dataset.navLogged = "true";
+                    foundCount++;
                 }
                 
-                // Search & Browse (check for "search" in text - may be just icon+text)
+                // Search & Browse (check for "search" in text)
                 if (text.includes("search")) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
