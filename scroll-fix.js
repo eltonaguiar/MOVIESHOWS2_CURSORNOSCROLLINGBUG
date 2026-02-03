@@ -521,48 +521,107 @@
         if (!queuePanel) return;
         const content = queuePanel.querySelector(".panel-content");
         
-        if (userQueue.length === 0) {
-            content.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <svg style="width: 64px; height: 64px; color: #444; margin-bottom: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                    </svg>
-                    <h3 style="color: white; font-size: 18px; margin-bottom: 8px;">Your queue is empty</h3>
-                    <p style="color: #888; font-size: 14px;">Save movies and shows to watch later by clicking the "List" button.</p>
-                </div>
-            `;
-            return;
-        }
+        // Get currently playing movies from the feed
+        const currentPlaylist = [];
+        videoSlides.forEach((slide, idx) => {
+            const title = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
+            const iframe = slide.querySelector('iframe');
+            const posterUrl = slide.querySelector('img')?.src || null;
+            currentPlaylist.push({
+                title,
+                index: idx,
+                isPlaying: idx === currentIndex,
+                posterUrl
+            });
+        });
         
+        // Build the panel HTML
         content.innerHTML = `
-            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #888; font-size: 14px;">${userQueue.length} item${userQueue.length > 1 ? 's' : ''}</span>
-                <button id="clear-queue" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 13px;">Clear All</button>
+            <!-- Now Playing Section -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #22c55e; font-size: 14px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite;"></span>
+                    Now Playing
+                </h3>
+                <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3);">
+                    ${currentPlaylist[currentIndex] ? `
+                        <h4 style="color: white; font-size: 16px; margin: 0;">${currentPlaylist[currentIndex].title}</h4>
+                        <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${currentIndex + 1} of ${currentPlaylist.length}</p>
+                    ` : '<p style="color: #888;">No video playing</p>'}
+                </div>
             </div>
-            <div id="queue-items" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            
+            <!-- Up Next Section -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, currentPlaylist.length - currentIndex - 1)} videos)</h3>
+                <div id="up-next-items" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+                    ${currentPlaylist.slice(currentIndex + 1, currentIndex + 6).map((item, i) => `
+                        <div class="up-next-item" data-index="${item.index}" style="
+                            display: flex; gap: 10px; padding: 8px; background: rgba(255,255,255,0.03);
+                            border-radius: 8px; cursor: pointer; transition: all 0.2s;
+                            border: 1px solid rgba(255,255,255,0.05);
+                        " onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                            <span style="color: #666; font-size: 12px; min-width: 20px;">${i + 1}</span>
+                            <span style="color: white; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
+                        </div>
+                    `).join('') || '<p style="color: #666; font-size: 13px; padding: 8px;">No more videos in queue</p>'}
+                </div>
+            </div>
+            
+            <!-- Saved Queue Section -->
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="color: #888; font-size: 12px; text-transform: uppercase;">My Saved Queue (${userQueue.length})</h3>
+                    ${userQueue.length > 0 ? '<button id="clear-queue" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 11px;">Clear All</button>' : ''}
+                </div>
+                
+                ${userQueue.length === 0 ? `
+                    <div style="text-align: center; padding: 20px; background: rgba(255,255,255,0.02); border-radius: 12px;">
+                        <p style="color: #666; font-size: 13px; margin: 0;">Click the "List" button on any video to save it here</p>
+                    </div>
+                ` : `
+                    <div id="queue-items" style="display: flex; flex-direction: column; gap: 8px;">
+                        ${userQueue.map((item, index) => `
+                            <div class="queue-item" draggable="true" data-index="${index}" style="
+                                display: flex; gap: 10px; padding: 10px; background: rgba(255,255,255,0.05);
+                                border-radius: 10px; cursor: grab; transition: all 0.2s;
+                                border: 1px solid rgba(255,255,255,0.1);
+                            ">
+                                <div class="drag-handle" style="display: flex; align-items: center; color: #555; cursor: grab;">⋮⋮</div>
+                                <img src="${item.posterUrl || 'https://via.placeholder.com/40x60/1a1a2e/ffffff?text=?'}" 
+                                    style="width: 40px; height: 60px; object-fit: cover; border-radius: 6px;" onerror="this.src='https://via.placeholder.com/40x60/1a1a2e/ffffff?text=?'">
+                                <div style="flex: 1; min-width: 0;">
+                                    <h4 style="color: white; font-size: 13px; margin: 0 0 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h4>
+                                    <p style="color: #888; font-size: 11px; margin: 0;">${item.year || ''}</p>
+                                    <div style="margin-top: 6px; display: flex; gap: 6px;">
+                                        <button class="play-queue-item" style="padding: 4px 10px; background: #22c55e; color: black; 
+                                            border: none; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer;">▶ Play</button>
+                                        <button class="remove-queue-item" style="padding: 4px 8px; background: rgba(255,255,255,0.1); 
+                                            color: #aaa; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">✕</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `}
+            </div>
+            
+            <style>
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+                .queue-item.dragging {
+                    opacity: 0.5;
+                    background: rgba(34, 197, 94, 0.2) !important;
+                }
+                .queue-item.drag-over {
+                    border-color: #22c55e !important;
+                }
+            </style>
         `;
         
-        const itemsContainer = content.querySelector("#queue-items");
-        itemsContainer.innerHTML = userQueue.map((item, index) => `
-            <div class="queue-item" data-index="${index}" style="
-                display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05);
-                border-radius: 12px; cursor: pointer; transition: all 0.2s;
-                border: 1px solid rgba(255,255,255,0.1);
-            ">
-                <img src="${item.posterUrl || 'https://via.placeholder.com/60x90/1a1a2e/ffffff?text=?'}" 
-                    style="width: 60px; height: 90px; object-fit: cover; border-radius: 8px;">
-                <div style="flex: 1; min-width: 0;">
-                    <h4 style="color: white; font-size: 14px; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h4>
-                    <p style="color: #888; font-size: 12px; margin: 0;">${item.year || ''}</p>
-                    <button class="play-queue-item" style="margin-top: 8px; padding: 6px 12px; background: #22c55e; color: black; 
-                        border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">▶ Play</button>
-                    <button class="remove-queue-item" style="margin-top: 8px; margin-left: 8px; padding: 6px 12px; background: rgba(255,255,255,0.1); 
-                        color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Remove</button>
-                </div>
-            </div>
-        `).join("");
-        
-        // Add handlers
+        // Add handlers for clear queue
         content.querySelector("#clear-queue")?.addEventListener("click", () => {
             userQueue = [];
             saveQueue();
@@ -570,28 +629,93 @@
             showToast("Queue cleared");
         });
         
-        itemsContainer.querySelectorAll(".play-queue-item").forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const index = parseInt(btn.closest(".queue-item").dataset.index);
-                const item = userQueue[index];
-                if (item) {
-                    const movie = allMoviesData.find(m => m.title === item.title) || item;
-                    closePanel(queuePanel);
-                    showToast(`Playing: ${movie.title}`);
-                    addMovieToFeed(movie, true, true);
-                }
+        // Add handlers for up-next items
+        content.querySelectorAll(".up-next-item").forEach(item => {
+            item.addEventListener("click", () => {
+                const idx = parseInt(item.dataset.index);
+                scrollToSlide(idx);
+                showToast(`Jumping to video ${idx + 1}`);
             });
         });
         
-        itemsContainer.querySelectorAll(".remove-queue-item").forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const index = parseInt(btn.closest(".queue-item").dataset.index);
-                userQueue.splice(index, 1);
-                saveQueue();
-                updateQueuePanel();
-                showToast("Removed from queue");
+        // Add handlers for queue items
+        const itemsContainer = content.querySelector("#queue-items");
+        if (itemsContainer) {
+            itemsContainer.querySelectorAll(".play-queue-item").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.closest(".queue-item").dataset.index);
+                    const item = userQueue[index];
+                    if (item) {
+                        const movie = allMoviesData.find(m => m.title === item.title) || item;
+                        closePanel(queuePanel);
+                        showToast(`Playing: ${movie.title}`);
+                        addMovieToFeed(movie, true, true);
+                    }
+                });
+            });
+            
+            itemsContainer.querySelectorAll(".remove-queue-item").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.closest(".queue-item").dataset.index);
+                    const removed = userQueue.splice(index, 1);
+                    saveQueue();
+                    updateQueuePanel();
+                    showToast(`Removed "${removed[0]?.title || 'item'}"`);
+                });
+            });
+            
+            // Drag and drop for reordering
+            setupQueueDragAndDrop(itemsContainer);
+        }
+    }
+    
+    function setupQueueDragAndDrop(container) {
+        let draggedItem = null;
+        let draggedIndex = -1;
+        
+        container.querySelectorAll(".queue-item").forEach(item => {
+            item.addEventListener("dragstart", (e) => {
+                draggedItem = item;
+                draggedIndex = parseInt(item.dataset.index);
+                item.classList.add("dragging");
+                e.dataTransfer.effectAllowed = "move";
+            });
+            
+            item.addEventListener("dragend", () => {
+                item.classList.remove("dragging");
+                container.querySelectorAll(".queue-item").forEach(i => i.classList.remove("drag-over"));
+                draggedItem = null;
+            });
+            
+            item.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (draggedItem && draggedItem !== item) {
+                    item.classList.add("drag-over");
+                }
+            });
+            
+            item.addEventListener("dragleave", () => {
+                item.classList.remove("drag-over");
+            });
+            
+            item.addEventListener("drop", (e) => {
+                e.preventDefault();
+                item.classList.remove("drag-over");
+                
+                if (draggedItem && draggedItem !== item) {
+                    const dropIndex = parseInt(item.dataset.index);
+                    
+                    // Reorder the queue
+                    const [movedItem] = userQueue.splice(draggedIndex, 1);
+                    userQueue.splice(dropIndex, 0, movedItem);
+                    
+                    saveQueue();
+                    updateQueuePanel();
+                    showToast("Queue reordered");
+                }
             });
         });
     }
@@ -751,12 +875,14 @@
                     }, true);
                 }
                 
-                // Category: Now Playing
-                if (text.match(/^now playing\s*\(\d+\)$/i)) {
+                // Category: Now Playing (flexible regex to match various formats)
+                if (text.match(/now\s*playing/i) && text.includes("(")) {
                     btn.dataset.navHandled = "true";
+                    console.log("[MovieShows] Bound Now Playing button:", text);
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        e.stopImmediatePropagation();
                         currentFilter = 'nowplaying';
                         updateCategoryButtons();
                         showToast("Showing now playing");
