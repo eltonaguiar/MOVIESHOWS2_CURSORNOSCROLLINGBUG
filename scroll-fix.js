@@ -527,6 +527,13 @@
         const actualVisibleIndex = getCurrentVisibleIndex();
         currentIndex = actualVisibleIndex; // Sync currentIndex
         
+        // Helper function to get poster URL from allMoviesData
+        const getPosterFromData = (title) => {
+            if (!title || title === 'Unknown') return null;
+            const movie = window.allMoviesData?.find(m => m.title === title);
+            return movie?.posterUrl || null;
+        };
+        
         // Get the actual visible slide's title and poster from the DOM (what user sees)
         let nowPlayingTitle = 'Unknown';
         let nowPlayingPoster = null;
@@ -535,7 +542,8 @@
             nowPlayingTitle = visibleSlide.dataset?.movieTitle || 
                               visibleSlide.querySelector('h2')?.textContent || 
                               'Unknown';
-            nowPlayingPoster = visibleSlide.querySelector('img')?.src || null;
+            // Try to get poster from DOM first, then from allMoviesData
+            nowPlayingPoster = visibleSlide.querySelector('img')?.src || getPosterFromData(nowPlayingTitle);
         }
         
         // Build playlist with deduplication
@@ -543,7 +551,8 @@
         const currentPlaylist = [];
         videoSlides.forEach((slide, idx) => {
             const title = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
-            const posterUrl = slide.querySelector('img')?.src || null;
+            // Try to get poster from DOM first, then from allMoviesData
+            const posterUrl = slide.querySelector('img')?.src || getPosterFromData(title);
             
             // Only add if not seen before (deduplicate)
             if (!seenTitles.has(title)) {
@@ -596,9 +605,10 @@
                     Now Playing
                 </h3>
                 <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3); display: flex; gap: 12px; align-items: center;">
-                    ${isThumbnailMode && nowPlayingPoster ? `
-                        <img src="${nowPlayingPoster}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0;" 
-                            onerror="this.style.display='none'">
+                    ${isThumbnailMode ? `
+                        <img src="${nowPlayingPoster || 'https://via.placeholder.com/50x75/1a1a2e/22c55e?text=' + encodeURIComponent(nowPlayingTitle?.charAt(0) || '?')}" 
+                            style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a2e;" 
+                            onerror="this.src='https://via.placeholder.com/50x75/1a1a2e/22c55e?text=?'">
                     ` : ''}
                     <div style="flex: 1; min-width: 0;">
                         <h4 style="color: white; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nowPlayingTitle}</h4>
@@ -618,7 +628,9 @@
                             border: 1px solid rgba(255,255,255,0.05); align-items: center;
                         " onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
                             <span style="color: #666; font-size: 12px; min-width: 20px;">${i + 1}</span>
-                            ${item.posterUrl ? `<img src="${item.posterUrl}" style="width: 30px; height: 45px; object-fit: cover; border-radius: 4px;" onerror="this.style.display='none'">` : ''}
+                            <img src="${item.posterUrl || 'https://via.placeholder.com/30x45/1a1a2e/666?text=' + encodeURIComponent(item.title?.charAt(0) || '?')}" 
+                                style="width: 30px; height: 45px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #1a1a2e;" 
+                                onerror="this.src='https://via.placeholder.com/30x45/1a1a2e/666?text=?'">
                             <span style="color: white; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
                         </div>
                     ` : `
