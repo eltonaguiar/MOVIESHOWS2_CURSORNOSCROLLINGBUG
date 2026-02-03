@@ -1011,6 +1011,11 @@
         });
 
         currentIndex = index;
+        
+        // Force play video after scroll completes
+        setTimeout(() => {
+            forcePlayVisibleVideos();
+        }, 500);
     }
 
     function handleScroll() {
@@ -1312,24 +1317,44 @@
         videoSlides = findVideoSlides();
         console.log(`[MovieShows] Added ${initialMovies.length} initial videos`);
 
-        // Scroll to first slide
+        // Scroll to first slide and FORCE play video
         if (videoSlides.length > 0) {
             setTimeout(() => {
                 scrollToSlide(0);
-                // Double-check first video is playing
-                const firstSlide = videoSlides[0];
-                const iframe = firstSlide?.querySelector('iframe');
-                if (iframe) {
-                    const src = iframe.getAttribute('src');
-                    const dataSrc = iframe.dataset.src;
-                    if ((!src || src === '') && dataSrc) {
-                        console.log("[MovieShows] Force-loading first video:", dataSrc);
-                        iframe.src = dataSrc;
-                    } else {
-                        console.log("[MovieShows] First video already loaded:", src);
-                    }
-                }
+                // Force all visible iframes to load
+                forcePlayVisibleVideos();
             }, 300);
+        }
+    }
+    
+    function forcePlayVisibleVideos() {
+        // Find all iframes and set their src if empty
+        const allIframes = document.querySelectorAll('iframe[data-src]');
+        console.log(`[MovieShows] Found ${allIframes.length} iframes with data-src`);
+        
+        allIframes.forEach((iframe, index) => {
+            const src = iframe.getAttribute('src');
+            const dataSrc = iframe.dataset.src;
+            
+            // Check if iframe is in viewport
+            const rect = iframe.getBoundingClientRect();
+            const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+            
+            if (isVisible && (!src || src === '') && dataSrc) {
+                console.log(`[MovieShows] Force-loading iframe ${index}:`, dataSrc);
+                iframe.src = dataSrc;
+            }
+        });
+        
+        // Also try to find the first iframe specifically
+        const firstIframe = document.querySelector('iframe[data-src]');
+        if (firstIframe) {
+            const src = firstIframe.getAttribute('src');
+            const dataSrc = firstIframe.dataset.src;
+            if ((!src || src === '') && dataSrc) {
+                console.log("[MovieShows] Force-loading FIRST iframe:", dataSrc);
+                firstIframe.src = dataSrc;
+            }
         }
     }
 
