@@ -1238,13 +1238,64 @@
         });
     }
 
+    function clearPlaceholderSlides() {
+        if (!scrollContainer) return;
+        
+        // Find slides that don't have real video content (no data-src on iframe)
+        const slides = scrollContainer.querySelectorAll('[class*="snap-center"]');
+        let removed = 0;
+        
+        slides.forEach(slide => {
+            const iframe = slide.querySelector('iframe[data-src]');
+            // If no iframe with data-src, it's a placeholder - remove it
+            if (!iframe) {
+                slide.remove();
+                removed++;
+            }
+        });
+        
+        if (removed > 0) {
+            console.log(`[MovieShows] Cleared ${removed} placeholder slides`);
+        }
+    }
+
+    function populateInitialVideos() {
+        if (allMoviesData.length === 0) {
+            console.log("[MovieShows] Waiting for movie data...");
+            setTimeout(populateInitialVideos, 500);
+            return;
+        }
+
+        // Clear any placeholder slides first
+        clearPlaceholderSlides();
+
+        // Check if we already have video slides with real content
+        const existingSlides = scrollContainer?.querySelectorAll('iframe[data-src]') || [];
+        if (existingSlides.length > 0) {
+            console.log(`[MovieShows] Already have ${existingSlides.length} video slides`);
+            return;
+        }
+
+        console.log("[MovieShows] Populating initial videos from database...");
+
+        // Add first 10 movies to start
+        const initialMovies = allMoviesData.slice(0, 10);
+        initialMovies.forEach((movie, i) => {
+            addMovieToFeed(movie, i === 0); // Scroll to first one
+        });
+
+        // Refresh slide list
+        videoSlides = findVideoSlides();
+        console.log(`[MovieShows] Added ${initialMovies.length} initial videos`);
+    }
+
     function init() {
         if (initialized) return;
 
         console.log("[MovieShows] Initializing...");
 
         injectStyles();
-        setupVideoObserver(); // Add this line
+        setupVideoObserver();
         setupIframeObserver();
         createPlayerSizeControl();
         createLayoutControl();
@@ -1259,10 +1310,13 @@
             return;
         }
 
+        // Clear placeholders and populate with real videos
+        setTimeout(populateInitialVideos, 1000);
+
         videoSlides = findVideoSlides();
+        // Don't require existing slides - we'll add them
         if (videoSlides.length === 0) {
-            setTimeout(init, 1000);
-            return;
+            console.log("[MovieShows] No slides yet, will populate after data loads");
         }
 
         console.log("[MovieShows] Found", videoSlides.length, "videos");
