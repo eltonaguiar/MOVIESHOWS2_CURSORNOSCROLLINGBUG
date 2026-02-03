@@ -2407,6 +2407,7 @@
         "Music"
       ],
       "source": "In Theatres",
+      "trailerUrl": "https://www.youtube.com/watch?v=6COmYeLsz4c",
       "posterUrl": "https://image.tmdb.org/t/p/w500/wickedforgood.jpg",
       "description": "A documentary or special screening related to the making of the Wicked movies.",
       "nowPlaying": []
@@ -2493,6 +2494,7 @@
         "Drama"
       ],
       "source": "In Theatres",
+      "trailerUrl": "https://www.youtube.com/watch?v=6COmYeLsz4c",
       "posterUrl": "https://image.tmdb.org/t/p/w500/wicked2wicked2wicked.jpg",
       "description": "The conclusion of the epic musical saga starring Cynthia Erivo and Ariana Grande.",
       "nowPlaying": []

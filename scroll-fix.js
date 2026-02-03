@@ -724,8 +724,9 @@
         } catch (e) { return url; }
 
         if (videoId) {
-            // Autoplay=1, Mute=0, Loop=1
-            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=0&loop=1&playlist=${videoId}`;
+            // Autoplay=1, Mute=1 (required for autoplay), Controls=0, Loop=1
+            // Modern browsers require mute=1 for autoplay to work
+            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${videoId}&modestbranding=1&rel=0`;
         }
         return url;
     }
@@ -1290,26 +1291,36 @@
 
         console.log("[MovieShows] Populating initial videos from database...");
 
-        // Find Dune: Part Two first (the original default video)
-        const duneMovie = allMoviesData.find(m => 
-            m.title?.toLowerCase().includes('dune') || 
-            m.title?.toLowerCase().includes('part two')
+        // CRITICAL: Only use movies that have a valid trailerUrl
+        const moviesWithTrailers = allMoviesData.filter(m => m.trailerUrl && m.trailerUrl.length > 10);
+        console.log(`[MovieShows] Found ${moviesWithTrailers.length} movies with valid trailer URLs`);
+
+        if (moviesWithTrailers.length === 0) {
+            console.error("[MovieShows] No movies with trailer URLs found!");
+            return;
+        }
+
+        // Find Dune: Part Two first (specifically "Dune", not just "part two")
+        const duneMovie = moviesWithTrailers.find(m => 
+            m.title?.toLowerCase().includes('dune')
         );
         
         // Build initial list: Dune first if found, then others
         let initialMovies = [];
         if (duneMovie) {
+            console.log(`[MovieShows] Found Dune movie: ${duneMovie.title}`);
             initialMovies.push(duneMovie);
             // Add 9 more random movies (excluding Dune)
-            const others = allMoviesData.filter(m => m.title !== duneMovie.title).slice(0, 9);
+            const others = moviesWithTrailers.filter(m => m.title !== duneMovie.title).slice(0, 9);
             initialMovies = initialMovies.concat(others);
         } else {
-            // Fallback: just use first 10
-            initialMovies = allMoviesData.slice(0, 10);
+            // Fallback: just use first 10 with trailers
+            initialMovies = moviesWithTrailers.slice(0, 10);
         }
 
         // Add movies to feed - load first one immediately, others lazy
         initialMovies.forEach((movie, index) => {
+            console.log(`[MovieShows] Adding: ${movie.title} (trailer: ${movie.trailerUrl ? 'YES' : 'NO'})`);
             addMovieToFeed(movie, false, index === 0); // loadImmediately for first one
         });
 
@@ -1330,31 +1341,43 @@
     function forcePlayVisibleVideos() {
         // Find all iframes and set their src if empty
         const allIframes = document.querySelectorAll('iframe[data-src]');
-        console.log(`[MovieShows] Found ${allIframes.length} iframes with data-src`);
+        console.log(`[MovieShows] forcePlayVisibleVideos - Found ${allIframes.length} iframes`);
         
         allIframes.forEach((iframe, index) => {
             const src = iframe.getAttribute('src');
             const dataSrc = iframe.dataset.src;
             
+            console.log(`[MovieShows] Iframe ${index}: src="${src || 'empty'}", data-src="${dataSrc || 'none'}"`);
+            
             // Check if iframe is in viewport
             const rect = iframe.getBoundingClientRect();
             const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
             
+            // Force load if: in viewport AND (no src OR src is empty) AND has data-src
             if (isVisible && (!src || src === '') && dataSrc) {
-                console.log(`[MovieShows] Force-loading iframe ${index}:`, dataSrc);
+                console.log(`[MovieShows] Loading visible iframe ${index}:`, dataSrc);
                 iframe.src = dataSrc;
             }
         });
         
-        // Also try to find the first iframe specifically
+        // ALWAYS force-load the first iframe regardless of visibility
         const firstIframe = document.querySelector('iframe[data-src]');
         if (firstIframe) {
             const src = firstIframe.getAttribute('src');
             const dataSrc = firstIframe.dataset.src;
-            if ((!src || src === '') && dataSrc) {
-                console.log("[MovieShows] Force-loading FIRST iframe:", dataSrc);
-                firstIframe.src = dataSrc;
+            console.log(`[MovieShows] First iframe check: src="${src || 'empty'}", data-src="${dataSrc || 'none'}"`);
+            
+            if (dataSrc && dataSrc.includes('youtube')) {
+                // Always ensure first iframe has src set
+                if (!src || src === '' || src !== dataSrc) {
+                    console.log("[MovieShows] FORCE setting first iframe src:", dataSrc);
+                    firstIframe.src = dataSrc;
+                } else {
+                    console.log("[MovieShows] First iframe already has correct src");
+                }
             }
+        } else {
+            console.log("[MovieShows] WARNING: No iframes found with data-src!");
         }
     }
 
