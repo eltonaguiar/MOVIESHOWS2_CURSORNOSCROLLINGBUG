@@ -95,25 +95,29 @@
     }
     
     function applyMuteStateToAllVideos() {
-        // Update all iframe src URLs to reflect mute state
-        const iframes = document.querySelectorAll('iframe[src*="youtube"]');
-        iframes.forEach(iframe => {
-            const currentSrc = iframe.src;
-            if (currentSrc) {
-                // Replace mute parameter
-                let newSrc;
-                if (currentSrc.includes('mute=')) {
-                    newSrc = currentSrc.replace(/mute=\d/, `mute=${isMuted ? 1 : 0}`);
-                } else {
-                    newSrc = currentSrc + `&mute=${isMuted ? 1 : 0}`;
-                }
-                
-                // Only update if changed (to avoid reload flicker)
-                if (newSrc !== currentSrc) {
-                    iframe.src = newSrc;
-                }
+        const muteValue = isMuted ? 1 : 0;
+        
+        // Update all data-src attributes for future loads
+        const allIframes = document.querySelectorAll('iframe[data-src*="youtube"]');
+        allIframes.forEach(iframe => {
+            const dataSrc = iframe.getAttribute('data-src');
+            if (dataSrc) {
+                const newDataSrc = dataSrc.replace(/mute=\d/, `mute=${muteValue}`);
+                iframe.setAttribute('data-src', newDataSrc);
             }
         });
+        
+        // Update the currently playing video's src
+        if (currentlyPlayingIframe) {
+            const currentSrc = currentlyPlayingIframe.getAttribute('src');
+            if (currentSrc && currentSrc.includes('youtube')) {
+                const newSrc = currentSrc.replace(/mute=\d/, `mute=${muteValue}`);
+                if (newSrc !== currentSrc) {
+                    console.log(`[MovieShows] Updating current video mute state to: ${isMuted ? 'muted' : 'unmuted'}`);
+                    currentlyPlayingIframe.src = newSrc;
+                }
+            }
+        }
     }
     
     function getMuteParam() {
@@ -1813,6 +1817,8 @@
         if (newIndex !== currentIndex) {
             currentIndex = newIndex;
             checkInfiniteScroll(); // Check if we need more content
+            // Switch to the new video
+            forcePlayVisibleVideos();
         }
     }
 
@@ -2003,39 +2009,69 @@
     }
 
     let videoObserver = null;
+    let currentlyPlayingIframe = null;
+    
     function setupVideoObserver() {
         if (videoObserver) return;
 
         videoObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const iframe = entry.target;
-                if (entry.isIntersecting) {
-                    // Load src if empty
-                    let dataSrc = iframe.getAttribute('data-src');
-                    if (dataSrc && !iframe.getAttribute('src')) {
-                        // Apply current mute state to the URL
-                        if (dataSrc.includes('mute=')) {
-                            dataSrc = dataSrc.replace(/mute=\d/, `mute=${getMuteParam()}`);
-                        }
-                        console.log(`[MovieShows] Playing video (muted=${isMuted}): ${dataSrc}`);
-                        iframe.setAttribute('src', dataSrc);
-                    }
-                } else {
-                    // Unload src to stop playback
-                    if (iframe.getAttribute('src')) {
-                        console.log(`[MovieShows] Pausing video (out of view)`);
-                        iframe.setAttribute('src', '');
-                    }
+                const slide = iframe.closest('[class*="snap-center"]');
+                const slideIndex = slide ? Array.from(slide.parentElement.children).indexOf(slide) : -1;
+                
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.7) {
+                    // This is the main visible video - play it
+                    playVideo(iframe);
+                } else if (!entry.isIntersecting || entry.intersectionRatio < 0.3) {
+                    // Out of view - pause it
+                    pauseVideo(iframe);
                 }
             });
         }, {
-            threshold: 0.5 // 50% visible to play
+            threshold: [0.3, 0.7] // More precise thresholds
         });
 
         // Observe existing
         document.querySelectorAll('iframe.lazy-iframe').forEach(iframe => {
             videoObserver.observe(iframe);
         });
+    }
+    
+    function playVideo(iframe) {
+        if (!iframe) return;
+        
+        let dataSrc = iframe.getAttribute('data-src');
+        if (!dataSrc) return;
+        
+        // Apply current mute state to the URL
+        dataSrc = dataSrc.replace(/mute=\d/, `mute=${getMuteParam()}`);
+        
+        const currentSrc = iframe.getAttribute('src');
+        
+        // Only update if different (to avoid reloading)
+        if (currentSrc !== dataSrc) {
+            // First, pause any other playing video
+            if (currentlyPlayingIframe && currentlyPlayingIframe !== iframe) {
+                pauseVideo(currentlyPlayingIframe);
+            }
+            
+            console.log(`[MovieShows] Playing video (muted=${isMuted})`);
+            iframe.setAttribute('src', dataSrc);
+            currentlyPlayingIframe = iframe;
+        }
+    }
+    
+    function pauseVideo(iframe) {
+        if (!iframe) return;
+        const src = iframe.getAttribute('src');
+        if (src && src !== '') {
+            console.log(`[MovieShows] Pausing video (out of view)`);
+            iframe.setAttribute('src', '');
+            if (currentlyPlayingIframe === iframe) {
+                currentlyPlayingIframe = null;
+            }
+        }
     }
 
     function clearPlaceholderSlides() {
@@ -2130,45 +2166,55 @@
     }
     
     function forcePlayVisibleVideos() {
-        // Find all iframes and set their src if empty
+        // Find the currently visible slide based on scroll position
         const allIframes = document.querySelectorAll('iframe[data-src]');
         console.log(`[MovieShows] forcePlayVisibleVideos - Found ${allIframes.length} iframes`);
         
+        if (allIframes.length === 0) {
+            console.log("[MovieShows] WARNING: No iframes found with data-src!");
+            return;
+        }
+        
+        // First, pause ALL videos
         allIframes.forEach((iframe, index) => {
             const src = iframe.getAttribute('src');
-            const dataSrc = iframe.dataset.src;
-            
-            console.log(`[MovieShows] Iframe ${index}: src="${src || 'empty'}", data-src="${dataSrc || 'none'}"`);
-            
-            // Check if iframe is in viewport
-            const rect = iframe.getBoundingClientRect();
-            const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
-            
-            // Force load if: in viewport AND (no src OR src is empty) AND has data-src
-            if (isVisible && (!src || src === '') && dataSrc) {
-                console.log(`[MovieShows] Loading visible iframe ${index}:`, dataSrc);
-                iframe.src = dataSrc;
+            if (src && src !== '') {
+                iframe.setAttribute('src', '');
             }
         });
         
-        // ALWAYS force-load the first iframe regardless of visibility
-        const firstIframe = document.querySelector('iframe[data-src]');
-        if (firstIframe) {
-            const src = firstIframe.getAttribute('src');
-            const dataSrc = firstIframe.dataset.src;
-            console.log(`[MovieShows] First iframe check: src="${src || 'empty'}", data-src="${dataSrc || 'none'}"`);
+        // Find which iframe is most visible (based on currentIndex or viewport)
+        let targetIframe = null;
+        
+        // Try to use currentIndex first
+        if (currentIndex >= 0 && currentIndex < allIframes.length) {
+            targetIframe = allIframes[currentIndex];
+        }
+        
+        // Fallback: find the most centered iframe
+        if (!targetIframe) {
+            let bestMatch = null;
+            let bestScore = -Infinity;
             
-            if (dataSrc && dataSrc.includes('youtube')) {
-                // Always ensure first iframe has src set
-                if (!src || src === '' || src !== dataSrc) {
-                    console.log("[MovieShows] FORCE setting first iframe src:", dataSrc);
-                    firstIframe.src = dataSrc;
-                } else {
-                    console.log("[MovieShows] First iframe already has correct src");
+            allIframes.forEach((iframe, index) => {
+                const rect = iframe.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const viewportCenterY = window.innerHeight / 2;
+                const distance = Math.abs(centerY - viewportCenterY);
+                const score = -distance; // Higher score = closer to center
+                
+                if (score > bestScore && rect.top < window.innerHeight && rect.bottom > 0) {
+                    bestScore = score;
+                    bestMatch = iframe;
                 }
-            }
-        } else {
-            console.log("[MovieShows] WARNING: No iframes found with data-src!");
+            });
+            
+            targetIframe = bestMatch || allIframes[0];
+        }
+        
+        // Play only the target iframe
+        if (targetIframe) {
+            playVideo(targetIframe);
         }
     }
 
