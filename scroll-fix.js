@@ -505,6 +505,7 @@
         // Find nav buttons directly and add click handlers
         const findAndSetupNavButtons = () => {
             const allButtons = document.querySelectorAll("button");
+            let foundCount = 0;
             
             allButtons.forEach(btn => {
                 const text = btn.textContent?.trim().toLowerCase() || "";
@@ -512,6 +513,12 @@
                 
                 // Skip if already handled
                 if (btn.dataset.navHandled) return;
+                
+                // Debug: log buttons that might be nav-related
+                if (text.includes("search") || text.includes("filter") || text.includes("queue") || text.includes("all") || text.includes("movies") || text.includes("tv")) {
+                    console.log(`[MovieShows] Found potential nav button: "${text}"`);
+                    foundCount++;
+                }
                 
                 // Search & Browse
                 if (text.includes("search") && text.includes("browse")) {
