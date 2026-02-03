@@ -730,7 +730,7 @@
         return url;
     }
 
-    function createSlide(movie) {
+    function createSlide(movie, loadImmediately = false) {
         const slide = document.createElement("div");
         slide.className = "h-full w-full snap-center";
 
@@ -742,12 +742,15 @@
         const rating = movie.rating ? `IMDb ${movie.rating}` : "TBD";
         const year = movie.year || "2026";
 
+        // If loadImmediately is true, set src directly; otherwise use lazy loading
+        const iframeSrc = loadImmediately ? embedUrl : "";
+        
         slide.innerHTML = `
             <div class="relative w-full h-full flex items-center justify-center overflow-hidden snap-center bg-transparent">
                 <div class="absolute inset-0 w-full h-full bg-black">
                      <iframe 
                         data-src="${embedUrl}" 
-                        src="" 
+                        src="${iframeSrc}" 
                         class="w-full h-full object-cover lazy-iframe" 
                         allow="autoplay; encrypted-media; picture-in-picture" 
                         allowfullscreen 
@@ -799,14 +802,14 @@
         return slide;
     }
 
-    function addMovieToFeed(movie, scrollAfter = false) {
+    function addMovieToFeed(movie, scrollAfter = false, loadImmediately = false) {
         if (!scrollContainer) {
             console.error("[MovieShows] addMovieToFeed failed: No scrollContainer.");
             scrollContainer = findScrollContainer(); // Try again
             if (!scrollContainer) return;
         }
 
-        console.log(`[MovieShows] Adding movie to feed: ${movie.title} (Scroll: ${scrollAfter})`);
+        console.log(`[MovieShows] Adding movie to feed: ${movie.title} (Scroll: ${scrollAfter}, LoadNow: ${loadImmediately})`);
 
         // Prevent strictly adjacent duplicates, but allow repeats eventually
         const lastSlide = videoSlides[videoSlides.length - 1];
@@ -819,7 +822,7 @@
             }
         }
 
-        const slide = createSlide(movie);
+        const slide = createSlide(movie, loadImmediately);
         scrollContainer.appendChild(slide);
 
         // Refresh videoSlides list
@@ -1300,26 +1303,33 @@
             initialMovies = allMoviesData.slice(0, 10);
         }
 
-        // Add movies to feed - DON'T scroll during add, scroll after all added
-        initialMovies.forEach((movie) => {
-            addMovieToFeed(movie, false);
+        // Add movies to feed - load first one immediately, others lazy
+        initialMovies.forEach((movie, index) => {
+            addMovieToFeed(movie, false, index === 0); // loadImmediately for first one
         });
 
         // Refresh slide list AFTER adding all movies
         videoSlides = findVideoSlides();
         console.log(`[MovieShows] Added ${initialMovies.length} initial videos`);
 
-        // Now scroll to first slide and force play
+        // Scroll to first slide
         if (videoSlides.length > 0) {
             setTimeout(() => {
                 scrollToSlide(0);
+                // Double-check first video is playing
                 const firstSlide = videoSlides[0];
                 const iframe = firstSlide?.querySelector('iframe');
-                if (iframe && iframe.dataset.src) {
-                    console.log("[MovieShows] Auto-playing first video...");
-                    iframe.src = iframe.dataset.src;
+                if (iframe) {
+                    const src = iframe.getAttribute('src');
+                    const dataSrc = iframe.dataset.src;
+                    if ((!src || src === '') && dataSrc) {
+                        console.log("[MovieShows] Force-loading first video:", dataSrc);
+                        iframe.src = dataSrc;
+                    } else {
+                        console.log("[MovieShows] First video already loaded:", src);
+                    }
                 }
-            }, 200);
+            }, 300);
         }
     }
 
