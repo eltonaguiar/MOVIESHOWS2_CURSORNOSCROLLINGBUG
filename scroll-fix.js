@@ -22,8 +22,15 @@
     let infoHidden = localStorage.getItem("movieshows-info-hidden") === "true";
     let actionPanelHidden = localStorage.getItem("movieshows-action-hidden") === "true";
     
+    // ========== API KEYS ==========
     // YouTube API Key (for future enhanced features)
     const YOUTUBE_API_KEY = "AIzaSyBjZruHqjPi2I5XEkpfoNMO5LY-8pzbvgs";
+    
+    // TMDB API Credentials (for movie data)
+    const TMDB_API_KEY = "b84ff7bfe35ffad8779b77bcbbda317f";
+    const TMDB_READ_ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiODRmZjdiZmUzNWZmYWQ4Nzc5Yjc3YmNiYmRhMzE3ZiIsIm5iZiI6MTU4NTg2ODk2NC41Mzc5OTk5LCJzdWIiOiI1ZTg2NzBhNGE1NzQzZDAwMTEwZmU3MWUiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zKkPzhHNhnlghJQeJJz2GddR8NEI_TzXAUgU96Ky_Q4";
+    const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+    const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
     
     function createInfoToggle() {
         if (document.getElementById("info-toggle")) return;
