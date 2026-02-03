@@ -7,7 +7,7 @@ test.describe('MovieShows App Tests', () => {
     
     test.beforeEach(async ({ page }) => {
         // Navigate and wait for the app to load
-        await page.goto(BASE_URL + '?v41test');
+        await page.goto(BASE_URL + '?v42test');
         // Wait for the scroll-fix.js to initialize (looks for our custom controls)
         await page.waitForTimeout(4000);
     });
