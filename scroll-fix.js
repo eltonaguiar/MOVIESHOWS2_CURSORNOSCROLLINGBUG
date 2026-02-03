@@ -10,6 +10,13 @@
     let scrollTimeout = null;
     const SCROLL_COOLDOWN = 500;
     
+    // ========== NAVIGATION STATE ==========
+    let currentFilter = 'all'; // all, movies, tv, nowplaying
+    let searchPanel = null;
+    let filterPanel = null;
+    let queuePanel = null;
+    let userQueue = JSON.parse(localStorage.getItem("movieshows-queue") || "[]");
+    
     // ========== MUTE CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
     
@@ -82,6 +89,538 @@
     
     function getMuteParam() {
         return isMuted ? 1 : 0;
+    }
+
+    // ========== NAVIGATION PANELS ==========
+    
+    function createPanelBase(id, title) {
+        const panel = document.createElement("div");
+        panel.id = id;
+        panel.style.cssText = `
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 380px;
+            max-width: 90vw;
+            height: 100vh;
+            background: rgba(15, 15, 20, 0.98);
+            backdrop-filter: blur(20px);
+            z-index: 10001;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            border-left: 1px solid rgba(255,255,255,0.1);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        `;
+        
+        const header = document.createElement("div");
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: sticky;
+            top: 0;
+            background: rgba(15, 15, 20, 0.98);
+            z-index: 10;
+        `;
+        
+        const titleEl = document.createElement("h2");
+        titleEl.textContent = title;
+        titleEl.style.cssText = "color: white; font-size: 20px; font-weight: bold; margin: 0;";
+        
+        const closeBtn = document.createElement("button");
+        closeBtn.innerHTML = "✕";
+        closeBtn.style.cssText = `
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+        `;
+        closeBtn.addEventListener("mouseenter", () => closeBtn.style.background = "rgba(255,255,255,0.2)");
+        closeBtn.addEventListener("mouseleave", () => closeBtn.style.background = "rgba(255,255,255,0.1)");
+        closeBtn.addEventListener("click", () => closePanel(panel));
+        
+        header.appendChild(titleEl);
+        header.appendChild(closeBtn);
+        panel.appendChild(header);
+        
+        const content = document.createElement("div");
+        content.className = "panel-content";
+        content.style.cssText = "padding: 20px;";
+        panel.appendChild(content);
+        
+        document.body.appendChild(panel);
+        return panel;
+    }
+    
+    function openPanel(panel) {
+        // Close any other open panels
+        [searchPanel, filterPanel, queuePanel].forEach(p => {
+            if (p && p !== panel) closePanel(p);
+        });
+        panel.style.right = "0";
+    }
+    
+    function closePanel(panel) {
+        if (panel) panel.style.right = "-400px";
+    }
+    
+    function createSearchPanel() {
+        if (searchPanel) return searchPanel;
+        
+        searchPanel = createPanelBase("search-panel", "Search & Browse");
+        const content = searchPanel.querySelector(".panel-content");
+        
+        // Search input
+        const searchBox = document.createElement("div");
+        searchBox.style.cssText = "margin-bottom: 20px;";
+        searchBox.innerHTML = `
+            <div style="position: relative;">
+                <input type="text" id="movie-search-input" placeholder="Search movies & shows..." 
+                    style="width: 100%; padding: 14px 14px 14px 45px; background: rgba(255,255,255,0.1); 
+                    border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: white; 
+                    font-size: 16px; outline: none; transition: all 0.2s;">
+                <svg style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: #888;" 
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </div>
+        `;
+        content.appendChild(searchBox);
+        
+        // Results container
+        const results = document.createElement("div");
+        results.id = "search-results";
+        results.style.cssText = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;";
+        content.appendChild(results);
+        
+        // Search functionality
+        const input = searchBox.querySelector("#movie-search-input");
+        input.addEventListener("focus", () => {
+            input.style.borderColor = "#22c55e";
+            input.style.background = "rgba(255,255,255,0.15)";
+        });
+        input.addEventListener("blur", () => {
+            input.style.borderColor = "rgba(255,255,255,0.2)";
+            input.style.background = "rgba(255,255,255,0.1)";
+        });
+        
+        let searchTimeout;
+        input.addEventListener("input", (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => performSearch(e.target.value), 300);
+        });
+        
+        // Show initial results
+        setTimeout(() => performSearch(""), 100);
+        
+        return searchPanel;
+    }
+    
+    function performSearch(query) {
+        const results = document.getElementById("search-results");
+        if (!results) return;
+        
+        let filtered = allMoviesData;
+        
+        if (query.trim()) {
+            const q = query.toLowerCase();
+            filtered = allMoviesData.filter(m => 
+                m.title?.toLowerCase().includes(q) ||
+                m.description?.toLowerCase().includes(q) ||
+                m.genres?.some(g => g.toLowerCase().includes(q))
+            );
+        }
+        
+        // Apply category filter
+        if (currentFilter === 'movies') {
+            filtered = filtered.filter(m => !m.type || m.type === 'movie');
+        } else if (currentFilter === 'tv') {
+            filtered = filtered.filter(m => m.type === 'tv' || m.type === 'series');
+        } else if (currentFilter === 'nowplaying') {
+            filtered = filtered.filter(m => m.source === 'Now Playing' || m.source === 'In Theatres');
+        }
+        
+        // Limit results
+        filtered = filtered.slice(0, 30);
+        
+        results.innerHTML = filtered.length === 0 
+            ? '<p style="color: #888; text-align: center; grid-column: span 2;">No results found</p>'
+            : filtered.map(m => createMovieCard(m)).join("");
+        
+        // Add click handlers
+        results.querySelectorAll(".movie-card").forEach(card => {
+            card.addEventListener("click", () => {
+                const title = card.dataset.title;
+                const movie = allMoviesData.find(m => m.title === title);
+                if (movie) {
+                    closePanel(searchPanel);
+                    showToast(`Playing: ${movie.title}`);
+                    addMovieToFeed(movie, true, true);
+                }
+            });
+        });
+    }
+    
+    function createMovieCard(movie) {
+        const posterUrl = movie.posterUrl || movie.image || `https://via.placeholder.com/150x225/1a1a2e/ffffff?text=${encodeURIComponent(movie.title?.substring(0,10) || 'Movie')}`;
+        return `
+            <div class="movie-card" data-title="${movie.title || ''}" style="
+                cursor: pointer;
+                border-radius: 12px;
+                overflow: hidden;
+                background: rgba(255,255,255,0.05);
+                transition: all 0.2s;
+                border: 1px solid rgba(255,255,255,0.1);
+            " onmouseenter="this.style.transform='scale(1.03)';this.style.borderColor='#22c55e'" 
+               onmouseleave="this.style.transform='scale(1)';this.style.borderColor='rgba(255,255,255,0.1)'">
+                <img src="${posterUrl}" alt="${movie.title}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover;" 
+                    onerror="this.src='https://via.placeholder.com/150x225/1a1a2e/ffffff?text=No+Image'">
+                <div style="padding: 10px;">
+                    <h4 style="color: white; font-size: 13px; font-weight: 600; margin: 0 0 4px 0; 
+                        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${movie.title || 'Unknown'}</h4>
+                    <p style="color: #888; font-size: 11px; margin: 0;">${movie.year || ''} ${movie.rating ? '• ⭐ ' + movie.rating : ''}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    function createFilterPanel() {
+        if (filterPanel) return filterPanel;
+        
+        filterPanel = createPanelBase("filter-panel", "Filters");
+        const content = filterPanel.querySelector(".panel-content");
+        
+        content.innerHTML = `
+            <div style="margin-bottom: 24px;">
+                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Content Type</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="movies">Movies</button>
+                    <button class="filter-btn" data-filter="tv">TV Shows</button>
+                    <button class="filter-btn" data-filter="nowplaying">Now Playing</button>
+                </div>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Genres</h3>
+                <div id="genre-filters" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Year</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="filter-btn" data-year="2026">2026</button>
+                    <button class="filter-btn" data-year="2025">2025</button>
+                    <button class="filter-btn" data-year="2024">2024</button>
+                    <button class="filter-btn" data-year="older">Older</button>
+                </div>
+            </div>
+            <button id="apply-filters" style="
+                width: 100%; padding: 14px; background: #22c55e; color: black; font-weight: bold;
+                border: none; border-radius: 12px; cursor: pointer; font-size: 16px; margin-top: 20px;
+                transition: all 0.2s;
+            ">Apply Filters</button>
+        `;
+        
+        // Style filter buttons
+        const style = document.createElement("style");
+        style.textContent = `
+            .filter-btn {
+                padding: 8px 16px;
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: #ccc;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.2s;
+            }
+            .filter-btn:hover {
+                background: rgba(255,255,255,0.2);
+                color: white;
+            }
+            .filter-btn.active {
+                background: #22c55e;
+                border-color: #22c55e;
+                color: black;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Populate genres
+        const genreContainer = content.querySelector("#genre-filters");
+        const genres = [...new Set(allMoviesData.flatMap(m => m.genres || []))].sort();
+        genreContainer.innerHTML = genres.slice(0, 15).map(g => 
+            `<button class="filter-btn" data-genre="${g}">${g}</button>`
+        ).join("");
+        
+        // Add click handlers
+        content.querySelectorAll(".filter-btn[data-filter]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                content.querySelectorAll(".filter-btn[data-filter]").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                currentFilter = btn.dataset.filter;
+                updateCategoryButtons();
+            });
+        });
+        
+        content.querySelectorAll(".filter-btn[data-genre]").forEach(btn => {
+            btn.addEventListener("click", () => btn.classList.toggle("active"));
+        });
+        
+        content.querySelectorAll(".filter-btn[data-year]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                content.querySelectorAll(".filter-btn[data-year]").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+            });
+        });
+        
+        content.querySelector("#apply-filters").addEventListener("click", () => {
+            closePanel(filterPanel);
+            showToast("Filters applied!");
+            // Refresh search if open
+            if (searchPanel && searchPanel.style.right === "0px") {
+                const input = document.getElementById("movie-search-input");
+                if (input) performSearch(input.value);
+            }
+        });
+        
+        return filterPanel;
+    }
+    
+    function createQueuePanel() {
+        if (queuePanel) return queuePanel;
+        
+        queuePanel = createPanelBase("queue-panel", "My Queue");
+        updateQueuePanel();
+        return queuePanel;
+    }
+    
+    function updateQueuePanel() {
+        if (!queuePanel) return;
+        const content = queuePanel.querySelector(".panel-content");
+        
+        if (userQueue.length === 0) {
+            content.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <svg style="width: 64px; height: 64px; color: #444; margin-bottom: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                    <h3 style="color: white; font-size: 18px; margin-bottom: 8px;">Your queue is empty</h3>
+                    <p style="color: #888; font-size: 14px;">Save movies and shows to watch later by clicking the "List" button.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        content.innerHTML = `
+            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #888; font-size: 14px;">${userQueue.length} item${userQueue.length > 1 ? 's' : ''}</span>
+                <button id="clear-queue" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 13px;">Clear All</button>
+            </div>
+            <div id="queue-items" style="display: flex; flex-direction: column; gap: 12px;"></div>
+        `;
+        
+        const itemsContainer = content.querySelector("#queue-items");
+        itemsContainer.innerHTML = userQueue.map((item, index) => `
+            <div class="queue-item" data-index="${index}" style="
+                display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05);
+                border-radius: 12px; cursor: pointer; transition: all 0.2s;
+                border: 1px solid rgba(255,255,255,0.1);
+            ">
+                <img src="${item.posterUrl || 'https://via.placeholder.com/60x90/1a1a2e/ffffff?text=?'}" 
+                    style="width: 60px; height: 90px; object-fit: cover; border-radius: 8px;">
+                <div style="flex: 1; min-width: 0;">
+                    <h4 style="color: white; font-size: 14px; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h4>
+                    <p style="color: #888; font-size: 12px; margin: 0;">${item.year || ''}</p>
+                    <button class="play-queue-item" style="margin-top: 8px; padding: 6px 12px; background: #22c55e; color: black; 
+                        border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">▶ Play</button>
+                    <button class="remove-queue-item" style="margin-top: 8px; margin-left: 8px; padding: 6px 12px; background: rgba(255,255,255,0.1); 
+                        color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Remove</button>
+                </div>
+            </div>
+        `).join("");
+        
+        // Add handlers
+        content.querySelector("#clear-queue")?.addEventListener("click", () => {
+            userQueue = [];
+            saveQueue();
+            updateQueuePanel();
+            showToast("Queue cleared");
+        });
+        
+        itemsContainer.querySelectorAll(".play-queue-item").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.closest(".queue-item").dataset.index);
+                const item = userQueue[index];
+                if (item) {
+                    const movie = allMoviesData.find(m => m.title === item.title) || item;
+                    closePanel(queuePanel);
+                    showToast(`Playing: ${movie.title}`);
+                    addMovieToFeed(movie, true, true);
+                }
+            });
+        });
+        
+        itemsContainer.querySelectorAll(".remove-queue-item").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.closest(".queue-item").dataset.index);
+                userQueue.splice(index, 1);
+                saveQueue();
+                updateQueuePanel();
+                showToast("Removed from queue");
+            });
+        });
+    }
+    
+    function addToQueue(movie) {
+        if (!movie?.title) return;
+        if (userQueue.some(q => q.title === movie.title)) {
+            showToast("Already in queue", true);
+            return;
+        }
+        userQueue.push({
+            title: movie.title,
+            posterUrl: movie.posterUrl || movie.image,
+            year: movie.year,
+            trailerUrl: movie.trailerUrl
+        });
+        saveQueue();
+        updateQueuePanel();
+        showToast(`Added "${movie.title}" to queue`);
+    }
+    
+    function saveQueue() {
+        localStorage.setItem("movieshows-queue", JSON.stringify(userQueue));
+    }
+    
+    function setupNavigationHandlers() {
+        // Use event delegation on document body for navigation buttons
+        document.body.addEventListener("click", (e) => {
+            const btn = e.target.closest("button");
+            if (!btn) return;
+            
+            const btnText = btn.textContent?.trim().toLowerCase() || "";
+            const btnName = btn.getAttribute("aria-label")?.toLowerCase() || btn.getAttribute("name")?.toLowerCase() || "";
+            
+            // Search & Browse button
+            if (btnText.includes("search") || btnName.includes("search")) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = createSearchPanel();
+                openPanel(panel);
+                setTimeout(() => document.getElementById("movie-search-input")?.focus(), 100);
+                return;
+            }
+            
+            // Filters button
+            if (btnText === "filters" || btnName.includes("filter")) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = createFilterPanel();
+                openPanel(panel);
+                return;
+            }
+            
+            // My Queue button
+            if (btnText.includes("queue") && !btnText.includes("play")) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = createQueuePanel();
+                openPanel(panel);
+                return;
+            }
+            
+            // Category buttons
+            if (btnText.includes("all (")) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentFilter = 'all';
+                updateCategoryButtons();
+                showToast("Showing all content");
+                return;
+            }
+            if (btnText.includes("movies (")) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentFilter = 'movies';
+                updateCategoryButtons();
+                showToast("Showing movies only");
+                return;
+            }
+            if (btnText.includes("tv (")) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentFilter = 'tv';
+                updateCategoryButtons();
+                showToast("Showing TV shows only");
+                return;
+            }
+            if (btnText.includes("now playing")) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentFilter = 'nowplaying';
+                updateCategoryButtons();
+                showToast("Showing now playing");
+                return;
+            }
+            
+            // List button (add to queue) - find current movie
+            if (btnText === "list" || btnText === "save") {
+                e.preventDefault();
+                e.stopPropagation();
+                const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
+                if (slide) {
+                    const title = slide.querySelector("h2")?.textContent;
+                    if (title) {
+                        const movie = allMoviesData.find(m => m.title === title);
+                        if (movie) addToQueue(movie);
+                    }
+                }
+                return;
+            }
+        }, true);
+        
+        // Handle Escape key to close panels
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                [searchPanel, filterPanel, queuePanel].forEach(p => {
+                    if (p) closePanel(p);
+                });
+            }
+        });
+        
+        console.log("[MovieShows] Navigation handlers set up");
+    }
+    
+    function updateCategoryButtons() {
+        // Update the visual state of category buttons in the original UI
+        const buttons = document.querySelectorAll("button");
+        buttons.forEach(btn => {
+            const text = btn.textContent?.toLowerCase() || "";
+            const isActive = 
+                (currentFilter === 'all' && text.includes("all (")) ||
+                (currentFilter === 'movies' && text.includes("movies (")) ||
+                (currentFilter === 'tv' && text.includes("tv (")) ||
+                (currentFilter === 'nowplaying' && text.includes("now playing"));
+            
+            if (text.includes("all (") || text.includes("movies (") || text.includes("tv (") || text.includes("now playing")) {
+                if (isActive) {
+                    btn.style.background = "#22c55e";
+                    btn.style.color = "black";
+                } else {
+                    btn.style.background = "";
+                    btn.style.color = "";
+                }
+            }
+        });
     }
 
     // ========== PLAYER SIZE CONTROL ==========
@@ -1472,6 +2011,7 @@
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
         setupCarouselInteractions();
+        setupNavigationHandlers();  // Enable search, filters, queue panels
 
         // START LOADING DATA
         loadMoviesData();
