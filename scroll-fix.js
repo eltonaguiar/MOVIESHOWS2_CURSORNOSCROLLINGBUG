@@ -2226,77 +2226,18 @@
     // ========== AUTO-SCROLL FUNCTIONALITY ==========
     // Now triggers at END of video, not arbitrary timer
     
-    let activeYTPlayers = new Map(); // Track YT.Player instances by iframe
-    
     function initYouTubeAPI() {
-        if (window.YT && window.YT.Player) {
-            ytApiReady = true;
-            console.log('[MovieShows] YouTube API already loaded');
-            return;
-        }
-        
-        // Load YouTube IFrame API
-        if (!document.getElementById('youtube-api-script')) {
-            const tag = document.createElement('script');
-            tag.id = 'youtube-api-script';
-            tag.src = 'https://www.youtube.com/iframe_api';
-            const firstScriptTag = document.getElementsByTagName('script')[0];
-            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-            console.log('[MovieShows] Loading YouTube IFrame API...');
-        }
-        
-        // YouTube API will call this when ready
-        window.onYouTubeIframeAPIReady = function() {
-            ytApiReady = true;
-            console.log('[MovieShows] YouTube IFrame API ready');
-        };
-    }
-    
-    // Create a YT.Player for an iframe to get proper event callbacks
-    function createYTPlayerForIframe(iframe) {
-        if (!window.YT || !window.YT.Player || !iframe) return null;
-        
-        // Don't create duplicate players
-        if (activeYTPlayers.has(iframe)) {
-            return activeYTPlayers.get(iframe);
-        }
-        
-        // iframe needs an ID for YT.Player
-        if (!iframe.id) {
-            iframe.id = 'yt-player-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        }
-        
-        try {
-            const player = new YT.Player(iframe.id, {
-                events: {
-                    'onStateChange': function(event) {
-                        console.log(`[MovieShows] YT.Player state change: ${event.data}`);
-                        // State 0 = ended
-                        if (event.data === 0 || event.data === YT.PlayerState.ENDED) {
-                            console.log('[MovieShows] YT.Player: Video ENDED');
-                            onVideoEnded();
-                        }
-                    },
-                    'onReady': function(event) {
-                        console.log('[MovieShows] YT.Player ready');
-                    },
-                    'onError': function(event) {
-                        console.warn('[MovieShows] YT.Player error:', event.data);
-                    }
-                }
-            });
-            
-            activeYTPlayers.set(iframe, player);
-            console.log(`[MovieShows] Created YT.Player for iframe ${iframe.id}`);
-            return player;
-        } catch (e) {
-            console.warn('[MovieShows] Could not create YT.Player:', e.message);
-            return null;
-        }
+        // We rely on postMessage infoDelivery for video end detection
+        // which works without needing to create YT.Player instances
+        ytApiReady = true;
+        console.log('[MovieShows] YouTube event detection ready (via postMessage)');
     }
     
     let lastVideoEndedTime = 0;
     const VIDEO_END_DEBOUNCE_MS = 2000; // Prevent duplicate triggers within 2 seconds
+    let currentVideoDuration = 0;
+    let currentVideoTime = 0;
+    let videoEndCheckInterval = null;
     
     function onVideoEnded() {
         // Debounce: prevent duplicate end triggers
@@ -2318,11 +2259,30 @@
             return;
         }
         
-        console.log(`[MovieShows] Video ended! Starting ${autoScrollDelay}s countdown to next video...`);
+        console.log(`[MovieShows] VIDEO ENDED! Starting ${autoScrollDelay}s countdown to next video...`);
         videoEndedWaitingForScroll = true;
+        
+        // Reset tracking
+        currentVideoDuration = 0;
+        currentVideoTime = 0;
         
         // Show countdown indicator
         startPostVideoCountdown();
+    }
+    
+    // Track video progress from infoDelivery messages
+    function trackVideoProgress(currentTime, duration) {
+        if (!duration || duration <= 0) return;
+        
+        currentVideoDuration = duration;
+        currentVideoTime = currentTime;
+        
+        // Check if video has reached the end (within 1 second of duration)
+        const remaining = duration - currentTime;
+        if (remaining <= 1 && currentTime > 0 && !videoEndedWaitingForScroll) {
+            console.log(`[MovieShows] Video reached end via progress tracking: ${currentTime.toFixed(1)}/${duration.toFixed(1)}`);
+            onVideoEnded();
+        }
     }
     
     function startPostVideoCountdown() {
@@ -2436,19 +2396,20 @@
                 // Check for infoDelivery format (YouTube uses this too)
                 if (data.info && typeof data.info === 'object') {
                     if (typeof data.info.playerState === 'number') {
-                        console.log(`[MovieShows] YouTube playerState: ${data.info.playerState}`);
+                        // Only log state changes (not every time update)
+                        if (data.info.playerState !== 1 || !currentVideoDuration) {
+                            console.log(`[MovieShows] YouTube playerState: ${data.info.playerState}`);
+                        }
                         if (data.info.playerState === 0) {
-                            console.log('[MovieShows] YouTube video ENDED (via infoDelivery)');
+                            console.log('[MovieShows] YouTube video ENDED (via infoDelivery playerState=0)');
                             onVideoEnded();
                         }
                     }
-                    // Also check currentTime - if video duration reached, it's ended
-                    if (data.info.duration && data.info.currentTime) {
-                        const remaining = data.info.duration - data.info.currentTime;
-                        if (remaining < 0.5 && data.info.duration > 0) {
-                            console.log(`[MovieShows] Video reached end (${data.info.currentTime}/${data.info.duration})`);
-                            onVideoEnded();
-                        }
+                    
+                    // CRITICAL: Track video progress to detect end
+                    // This is the most reliable method since we always receive these updates
+                    if (typeof data.info.currentTime === 'number' && typeof data.info.duration === 'number') {
+                        trackVideoProgress(data.info.currentTime, data.info.duration);
                     }
                 }
             } catch (e) {
@@ -4723,11 +4684,16 @@
             currentlyPlayingIframe = iframe;
             currentlyPlayingTitle = movieTitle;
             
-            // CRITICAL: Subscribe to YouTube events via postMessage
-            // Wait for iframe to load, then tell YouTube to send us state changes
-            iframe.onload = function() {
-                subscribeToYouTubeEvents(iframe);
-            };
+            // Reset video end tracking for new video
+            currentVideoDuration = 0;
+            currentVideoTime = 0;
+            videoEndedWaitingForScroll = false;
+            
+            // Subscribe to YouTube events after iframe loads
+            // Use setTimeout as backup since onload doesn't always fire reliably
+            const subscribeAfterLoad = () => subscribeToYouTubeEvents(iframe);
+            iframe.onload = subscribeAfterLoad;
+            setTimeout(subscribeAfterLoad, 1000); // Backup
             
             // Verify sync if expected title provided
             if (expectedTitle && expectedTitle !== movieTitle) {
@@ -4739,20 +4705,25 @@
         }
     }
     
-    // Subscribe to YouTube iframe events - try YT.Player first, then postMessage fallback
+    // Subscribe to YouTube iframe events
     function subscribeToYouTubeEvents(iframe) {
         if (!iframe) return;
         
-        // Primary method: Use YT.Player API if available
-        if (window.YT && window.YT.Player) {
-            // Small delay to ensure iframe is ready
-            setTimeout(() => {
-                createYTPlayerForIframe(iframe);
-            }, 500);
+        // Reset video tracking for new video
+        currentVideoDuration = 0;
+        currentVideoTime = 0;
+        
+        // Only try postMessage if iframe has YouTube src
+        const src = iframe.getAttribute('src') || '';
+        if (!src.includes('youtube.com')) {
+            console.log('[MovieShows] Skipping event subscription - not a YouTube iframe');
+            return;
         }
         
-        // Fallback: Also try postMessage approach
-        if (iframe.contentWindow) {
+        // Wait a bit for the iframe to be fully loaded
+        setTimeout(() => {
+            if (!iframe.contentWindow) return;
+            
             try {
                 // Tell YouTube we want to listen for events
                 const listenCommand = JSON.stringify({
@@ -4760,21 +4731,13 @@
                     id: 1,
                     channel: 'widget'
                 });
-                iframe.contentWindow.postMessage(listenCommand, 'https://www.youtube.com');
+                iframe.contentWindow.postMessage(listenCommand, '*'); // Use * to avoid origin mismatch
                 
-                // Also send command to start receiving state changes
-                const commandMsg = JSON.stringify({
-                    event: 'command',
-                    func: 'addEventListener',
-                    args: ['onStateChange']
-                });
-                iframe.contentWindow.postMessage(commandMsg, 'https://www.youtube.com');
-                
-                console.log(`[MovieShows] Subscribed to YouTube events (postMessage + API)`);
+                console.log(`[MovieShows] Subscribed to YouTube events`);
             } catch (e) {
-                console.warn('[MovieShows] postMessage subscription failed:', e.message);
+                // Silently fail - we'll still get infoDelivery messages
             }
-        }
+        }, 100);
     }
     
     function pauseVideo(iframe) {
