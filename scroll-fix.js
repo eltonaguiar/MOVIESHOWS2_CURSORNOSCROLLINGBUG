@@ -2250,7 +2250,24 @@
         };
     }
     
+    let lastVideoEndedTime = 0;
+    const VIDEO_END_DEBOUNCE_MS = 2000; // Prevent duplicate triggers within 2 seconds
+    
     function onVideoEnded() {
+        // Debounce: prevent duplicate end triggers
+        const now = Date.now();
+        if (now - lastVideoEndedTime < VIDEO_END_DEBOUNCE_MS) {
+            console.log('[MovieShows] Video ended event ignored (debounced)');
+            return;
+        }
+        lastVideoEndedTime = now;
+        
+        // Don't trigger if already waiting for scroll
+        if (videoEndedWaitingForScroll) {
+            console.log('[MovieShows] Video ended but already waiting for scroll');
+            return;
+        }
+        
         if (!autoScrollEnabled || autoScrollPaused) {
             console.log('[MovieShows] Video ended but auto-scroll disabled or paused');
             return;
@@ -2334,7 +2351,16 @@
     }
     
     // Listen for YouTube iframe messages (for video end detection)
+    let youtubeMessageListenerSetup = false;
+    
     function setupYouTubeMessageListener() {
+        // Prevent duplicate listener registration
+        if (youtubeMessageListenerSetup) {
+            console.log('[MovieShows] YouTube message listener already set up');
+            return;
+        }
+        youtubeMessageListenerSetup = true;
+        
         window.addEventListener('message', function(event) {
             // Only handle YouTube messages
             if (event.origin !== 'https://www.youtube.com') return;
@@ -2343,16 +2369,21 @@
                 const data = JSON.parse(event.data);
                 
                 // YouTube sends state changes through postMessage
-                // State 0 = ended, 1 = playing, 2 = paused
-                if (data.event === 'onStateChange' && data.info === 0) {
-                    console.log('[MovieShows] YouTube video ended (via postMessage)');
-                    onVideoEnded();
+                // State 0 = ended, 1 = playing, 2 = paused, 3 = buffering, 5 = cued
+                if (data.event === 'onStateChange') {
+                    console.log(`[MovieShows] YouTube state change: ${data.info}`);
+                    if (data.info === 0) {
+                        console.log('[MovieShows] YouTube video ended (via onStateChange)');
+                        onVideoEnded();
+                    }
                 }
                 
                 // Also check for infoDelivery which some embeds use
-                if (data.info && data.info.playerState === 0) {
-                    console.log('[MovieShows] YouTube video ended (via infoDelivery)');
-                    onVideoEnded();
+                if (data.info && typeof data.info.playerState === 'number') {
+                    if (data.info.playerState === 0) {
+                        console.log('[MovieShows] YouTube video ended (via infoDelivery)');
+                        onVideoEnded();
+                    }
                 }
             } catch (e) {
                 // Not a JSON message, ignore
@@ -3964,7 +3995,8 @@
             // For initial load, always mute=1 for autoplay compliance
             // After user interaction (unmute button), we can use mute=0
             const muteValue = forceInitialMute ? 1 : getMuteParam();
-            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muteValue}&controls=1&playsinline=1&loop=1&playlist=${videoId}&modestbranding=1&rel=0&enablejsapi=1`;
+            // IMPORTANT: No loop=1 - we want video to END so auto-next can advance to next slide
+            return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muteValue}&controls=1&playsinline=1&modestbranding=1&rel=0&enablejsapi=1`;
         }
         return url;
     }
