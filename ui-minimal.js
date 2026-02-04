@@ -1,295 +1,215 @@
-// UI Minimal - Strip back to clean, simple interface
-// This runs LAST and aggressively cleans up the UI
+// UI Minimal - ULTRA CLEAN interface
+// Keeps ONLY: mute button, category filters, basic player controls
 
 (function() {
-    console.log('[MovieShows] UI Minimal mode - Creating clean interface...');
+    console.log('[MovieShows] UI Minimal - ULTRA CLEAN mode...');
     
-    // Run cleanup multiple times to catch dynamically added elements
-    let cleanupRuns = 0;
+    // Essential buttons to KEEP (everything else gets hidden)
+    const KEEP_BUTTONS = [
+        'click to unmute', 'sound on', 'mute',
+        'all (', 'movies (', 'tv (', 'now playing',
+        'filters', 'search', 'queue', 'my queue',
+        'close', '✕', 'x',
+        'like', 'save',
+        'open quick nav', 'close menu'
+    ];
     
-    function aggressiveCleanup() {
-        cleanupRuns++;
-        console.log(`[MovieShows] Cleanup run #${cleanupRuns}`);
+    function shouldKeepButton(text) {
+        const lowerText = text.toLowerCase().trim();
+        return KEEP_BUTTONS.some(keep => lowerText.includes(keep));
+    }
+    
+    function ultraCleanup() {
+        console.log('[MovieShows] Running ultra cleanup...');
         
-        // Remove ALL feature batch UI elements
-        const selectorsToHide = [
-            // Feature batch buttons and containers
-            '[class*="ratings"]',
-            '[class*="accessibility"]',
-            '[class*="parental"]',
-            '[class*="download"]',
-            '[class*="soundtrack"]',
-            '[class*="reviews"]',
-            '[class*="quotes"]',
-            '[class*="trivia"]',
-            '[class*="mood"]',
-            '[class*="export"]',
-            '[class*="gallery"]',
-            '[class*="director"]',
-            '[class*="studio"]',
-            '[class*="franchise"]',
-            '[class*="awards"]',
-            '[class*="box-office"]',
-            '[class*="calendar"]',
-            '[class*="country"]',
-            '[class*="actor"]',
-            '[class*="crew"]',
-            '[class*="similar"]',
-            '[class*="loop"]',
-            '[class*="party"]',
-            '[class*="discuss"]',
-            '[class*="spoiler"]',
-            '[class*="notes"]',
-            '[class*="favorites"]',
-            '[class*="collections"]',
-            '[class*="binge"]',
-            '[class*="compare"]',
-            '[class*="themes"]',
-            '[class*="milestones"]',
-            '[class*="goals"]',
-            '[class*="bookmarks"]',
-            '[class*="pip"]',
-            '[class*="session"]',
-            '[class*="celebration"]',
-            '[class*="chapters"]',
-            '[class*="theater"]',
-            '[class*="subtitles"]',
-            '[class*="report"]',
-            '[class*="versions"]',
-            '[class*="alerts"]',
-            '[class*="preview"]',
-            '[class*="smart"]',
-            '[class*="freshness"]',
-            '[class*="mini-player"]',
-            '[class*="discovery"]',
-            '[class*="gesture"]',
-            '[class*="availability"]',
-            '[class*="schedule"]',
-            '[class*="quick-actions"]',
-            '[class*="speed"]',
-            '[class*="content-notes"]',
-            '[class*="watchlist-folders"]',
-            '[class*="keyboard"]',
-            '[class*="age-rating"]',
-            '[class*="recently-viewed"]',
-            '[class*="duration"]',
-            '[class*="quality"]',
-            '[class*="popularity"]',
-            '[class*="language"]',
-            '[class*="seasons"]',
-            '[class*="social"]',
-            '[class*="filters-smart"]',
-            '[class*="recommendations"]',
-            '[class*="trivia"]',
-            '[class*="time-goals"]',
-            '[class*="pip-controls"]',
-            '[class*="recovery"]',
-            '[id*="sandbox"]',
-            '[id*="main-menu"]',
-            '[id*="popup-menu"]'
-        ];
+        // Hide ALL buttons in the quick-nav except essentials
+        const quickNav = document.querySelector('.quick-nav, #quick-nav, nav');
+        if (quickNav) {
+            const buttons = quickNav.querySelectorAll('button, a');
+            buttons.forEach(btn => {
+                const text = btn.textContent || '';
+                if (!shouldKeepButton(text)) {
+                    btn.style.display = 'none';
+                }
+            });
+        }
         
-        // Hide elements matching selectors
-        selectorsToHide.forEach(selector => {
-            try {
-                document.querySelectorAll(selector).forEach(el => {
-                    el.style.display = 'none';
-                });
-            } catch(e) {}
+        // Hide most action buttons except like/save
+        document.querySelectorAll('.action-buttons button, .slide-actions button').forEach(btn => {
+            const text = (btn.textContent || '').toLowerCase();
+            if (!text.includes('like') && !text.includes('save') && !text.includes('share')) {
+                btn.style.display = 'none';
+            }
         });
         
-        // Find and hide buttons with sandbox-related text
-        const textToHide = [
-            'ratings', 'accessibility', 'parental', 'download queue',
-            'audio desc', 'cast & crew', 'soundtrack', 'reviews',
-            'bts', 'behind', 'quotes', 'trivia', 'mood match',
-            'export', 'share card', 'gallery', 'runtime', 'by year',
-            'language', 'director', 'studios', 'franchises', 'awards',
-            'box office', 'releases', 'country', 'actor', 'crew',
-            'find similar', 'shuffle all', 'loop', 'skip:', 'party mode',
-            'discuss', 'shield', 'notes', 'favorites', 'collections',
+        // Hide all the extra feature buttons that got injected
+        const hidePatterns = [
+            'accessibility', 'parental', 'trivia', 'mood', 'export',
+            'studios', 'franchises', 'awards', 'releases', 'party',
+            'shield', 'favorites', 'director', 'actor', 'crew',
+            'similar', 'broken', 'hype', 'thought', 'boring', 'emotional',
+            'ratings', 'download', 'soundtrack', 'reviews', 'quotes',
+            'gallery', 'runtime', 'year', 'language', 'country',
+            'loop', 'skip', 'discuss', 'notes', 'collections',
             'binge', 'compare', 'themes', 'milestones', 'goals',
             'bookmarks', 'pip', 'session', 'celebration', 'calendar',
             'tags', 'invites', 'insights', 'notifications', 'streaks',
             'chapters', 'theater', 'subtitles', 'report', 'versions',
-            'quality', 'sync', 'alerts', 'preview', 'smart pause',
-            'freshness', 'mini player', 'auto-resume', 'discovery',
-            'gesture', 'availability', 'schedule', 'quick actions',
-            'speed', 'watchlist folders', 'keyboard', 'age rating',
-            'recently viewed', 'duration filter', 'video quality',
-            'popularity', 'multi-lang', 'stats widget', 'seasons',
-            'content themes', 'quick trailer', 'social media',
-            'side by side', 'smart filters', 'recommendations engine',
-            'viewing milestones', 'content trivia', 'watch time',
-            'export data', 'pip controls', 'session recovery',
-            '🎉', 'sandbox', '🧪', '☰ menu', 'advanced', 'smart rec',
-            'timeline', 'viewing stats', 'picture-in-picture', 'reminders',
-            'scene bookmarks', 'autoplay settings', 'watch party',
-            'mood board', 'playlist manager', 'browse collections',
-            'compare content', 'content timeline', 'viewing dashboard',
-            'pip controller', 'content reminders', 'quick share'
+            'quality', 'sync', 'alerts', 'preview', 'speed',
+            'shuffle', 'cast', 'box office', 'trending', 'new',
+            'recently', 'coming soon', 'badges', 'tv mode', 'random',
+            'next description', 'alternative', 'movie fan', 'stats',
+            'autoplay settings', 'watch party', 'mood board',
+            'playlist manager', 'browse collections', 'compare content',
+            'smart', 'scene', 'quick share', 'timeline', 'dashboard',
+            'reminders', 'action', 'comedy', 'drama', 'horror',
+            'sci-fi', 'romance', 'thriller', 'animation', 'documentary',
+            'fantasy', 'def', 'high', 'mid', 'bar:', 'title',
+            '▲', '▼', '◄', '►', 'full', 'show actions'
         ];
         
-        document.querySelectorAll('button, a, [role="button"]').forEach(btn => {
+        document.querySelectorAll('button, [role="button"]').forEach(btn => {
+            // Skip mute control
+            if (btn.id === 'mute-control') return;
+            
             const text = (btn.textContent || '').toLowerCase();
             const title = (btn.title || '').toLowerCase();
             const combined = text + ' ' + title;
             
-            // Keep essential buttons
-            const essentialPatterns = [
-                'mute', 'unmute', 'sound', 'click to',
-                'all (', 'movies (', 'tv (', 'now playing',
-                'filters', 'search', 'queue', 'my queue',
-                'like', 'save', 'share', 'open', 'close', 'hide', 
-                'show', 'next', 'prev', '▲', '▼', '◄', '►',
-                'action', 'comedy', 'drama', 'horror', 'sci-fi', 
-                'romance', 'thriller', 'animation', 'documentary', 'fantasy',
-                'small', 'medium', 'large', 'full', 'def', 'high', 'mid',
-                'bar:', 'title', 'autoplay', 'on', 'off',
-                'trending', 'new', 'recently added', 'movie fan',
-                'coming soon', 'badges', 'tv mode', 'random',
-                'broken', 'hype', 'thought', 'boring', 'emotional'
-            ];
-            
-            const isEssential = essentialPatterns.some(p => combined.includes(p));
-            
-            if (!isEssential) {
-                for (const hideText of textToHide) {
-                    if (combined.includes(hideText.toLowerCase())) {
-                        btn.style.display = 'none';
-                        break;
-                    }
+            // Check if it matches any hide pattern
+            for (const pattern of hidePatterns) {
+                if (combined.includes(pattern)) {
+                    btn.style.display = 'none';
+                    break;
                 }
             }
         });
         
-        // Hide excessive nav items
-        const quickNav = document.querySelector('.quick-nav, #quick-nav');
-        if (quickNav) {
-            const buttons = quickNav.querySelectorAll('button');
-            // Keep only first 15 buttons in quick nav
-            buttons.forEach((btn, i) => {
-                if (i > 15) btn.style.display = 'none';
-            });
+        // Also hide the settings panel buttons (S, M, L, Full, etc)
+        const settingsPanel = document.querySelector('.settings-panel, #settings-panel, [class*="settings"]');
+        if (settingsPanel) {
+            settingsPanel.style.display = 'none';
         }
+        
+        // Hide info toggle
+        const infoToggle = document.getElementById('info-toggle');
+        if (infoToggle) infoToggle.style.display = 'none';
+        
+        // Hide action panel toggle
+        const actionToggle = document.getElementById('action-panel-toggle');
+        if (actionToggle) actionToggle.style.display = 'none';
     }
     
     function addMinimalStyles() {
-        if (document.getElementById('minimal-ui-styles')) return;
+        if (document.getElementById('ultra-minimal-styles')) return;
         
         const style = document.createElement('style');
-        style.id = 'minimal-ui-styles';
+        style.id = 'ultra-minimal-styles';
         style.textContent = `
-            /* Hide ALL feature batch containers */
+            /* Hide ALL extra UI elements */
+            .settings-panel,
+            #settings-panel,
             .feature-panel,
             .feature-modal,
-            .feature-popup,
-            [class*="batch"],
             [class*="premium"],
+            [class*="batch"],
             .quick-actions-popup,
             .quick-info-tooltip,
             #main-popup-menu,
             #main-menu-btn,
-            #sandbox-link-btn {
+            #sandbox-link-btn,
+            #info-toggle,
+            #action-panel-toggle,
+            .genre-buttons,
+            .duration-filter,
+            .speed-controls,
+            [class*="toolbar"] {
                 display: none !important;
             }
             
-            /* Clean up the video controls area */
-            .video-controls,
-            .player-controls {
-                display: flex !important;
-                flex-wrap: wrap !important;
-                gap: 5px !important;
-                max-width: 400px !important;
-                justify-content: center !important;
-            }
-            
-            .video-controls button,
-            .player-controls button {
-                font-size: 12px !important;
-                padding: 6px 10px !important;
-                margin: 2px !important;
-            }
-            
-            /* Keep the main player visible and working */
-            .video-slide,
-            .slide {
-                position: relative !important;
-            }
-            
-            .video-slide iframe,
-            .slide iframe {
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-            }
-            
-            /* Clean quick nav */
+            /* Clean quick nav - minimal */
             .quick-nav, #quick-nav {
-                max-width: 350px !important;
-                max-height: 60vh !important;
-                overflow-y: auto !important;
+                max-width: 280px !important;
                 padding: 10px !important;
+                background: rgba(26, 26, 46, 0.95) !important;
             }
             
-            /* Ensure mute button is visible */
+            /* Hide most buttons inside slides */
+            .video-slide .action-buttons,
+            .slide .action-buttons,
+            .slide-actions {
+                display: none !important;
+            }
+            
+            /* Keep mute button visible and prominent */
             #mute-control {
                 display: block !important;
+                position: fixed !important;
+                bottom: 20px !important;
+                left: 20px !important;
                 z-index: 10000 !important;
             }
             
-            /* Hide info toggle if cluttering */
-            #info-toggle {
-                display: none !important;
+            /* Ensure video fills screen properly */
+            .video-slide, .slide {
+                width: 100vw !important;
+                height: 100vh !important;
+                position: relative !important;
             }
             
-            /* Settings panel - keep minimal */
-            .settings-panel,
-            #settings-panel {
-                max-height: 50vh !important;
-                overflow-y: auto !important;
+            .video-slide iframe, .slide iframe {
+                width: 100% !important;
+                height: 100% !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
             }
             
-            /* Genre buttons - keep simple */
-            .genre-buttons {
-                max-width: 100% !important;
-                display: flex !important;
-                flex-wrap: wrap !important;
-                gap: 5px !important;
+            /* Clean movie info overlay */
+            .video-info, .movie-info {
+                position: absolute !important;
+                bottom: 80px !important;
+                left: 20px !important;
+                right: 20px !important;
+                background: linear-gradient(transparent, rgba(0,0,0,0.8)) !important;
+                padding: 20px !important;
+                border-radius: 10px !important;
             }
             
-            .genre-buttons button {
-                padding: 5px 10px !important;
-                font-size: 11px !important;
+            /* Simple category buttons */
+            .category-filters button {
+                background: rgba(255,255,255,0.1) !important;
+                border: 1px solid rgba(255,255,255,0.2) !important;
+                color: white !important;
+                padding: 8px 16px !important;
+                margin: 4px !important;
+                border-radius: 20px !important;
+                font-size: 13px !important;
+            }
+            
+            .category-filters button.active,
+            .category-filters button:hover {
+                background: #e94560 !important;
+                border-color: #e94560 !important;
             }
         `;
         document.head.appendChild(style);
     }
     
     function ensureVideoPlays() {
-        // Find the active/first video slide
-        const activeSlide = document.querySelector('.video-slide.active, .slide.active, [data-active="true"]') 
+        const activeSlide = document.querySelector('.video-slide.active, .slide.active') 
             || document.querySelector('.video-slide, .slide');
         
-        if (!activeSlide) {
-            console.log('[MovieShows] No video slide found');
-            return;
-        }
+        if (!activeSlide) return;
         
         const iframe = activeSlide.querySelector('iframe');
-        if (!iframe) {
-            console.log('[MovieShows] No iframe in slide');
-            return;
-        }
+        if (!iframe) return;
         
         const dataSrc = iframe.getAttribute('data-src');
         const currentSrc = iframe.getAttribute('src');
         
-        // If iframe has data-src but no src (or about:blank), activate it
-        if (dataSrc && (!currentSrc || currentSrc === 'about:blank' || !currentSrc.includes('youtube'))) {
-            console.log('[MovieShows] Activating video playback');
+        if (dataSrc && (!currentSrc || !currentSrc.includes('youtube'))) {
+            console.log('[MovieShows] Activating video...');
             iframe.src = dataSrc;
             activeSlide.classList.add('active');
         }
@@ -298,34 +218,25 @@
     function init() {
         addMinimalStyles();
         
-        // Run cleanup immediately
-        aggressiveCleanup();
-        
-        // Run again after short delays to catch dynamically added elements
-        setTimeout(aggressiveCleanup, 500);
-        setTimeout(aggressiveCleanup, 1500);
-        setTimeout(aggressiveCleanup, 3000);
-        setTimeout(aggressiveCleanup, 5000);
+        // Run cleanup multiple times
+        ultraCleanup();
+        setTimeout(ultraCleanup, 300);
+        setTimeout(ultraCleanup, 800);
+        setTimeout(ultraCleanup, 1500);
+        setTimeout(ultraCleanup, 3000);
+        setTimeout(ultraCleanup, 5000);
         
         // Ensure video plays
-        setTimeout(ensureVideoPlays, 2000);
+        setTimeout(ensureVideoPlays, 1000);
+        setTimeout(ensureVideoPlays, 3000);
         
-        // Watch for new elements being added
-        const observer = new MutationObserver((mutations) => {
-            let shouldClean = false;
-            mutations.forEach(mutation => {
-                if (mutation.addedNodes.length > 0) {
-                    shouldClean = true;
-                }
-            });
-            if (shouldClean && cleanupRuns < 20) {
-                setTimeout(aggressiveCleanup, 100);
-            }
+        // Watch for dynamically added elements
+        const observer = new MutationObserver(() => {
+            setTimeout(ultraCleanup, 50);
         });
-        
         observer.observe(document.body, { childList: true, subtree: true });
         
-        console.log('[MovieShows] Minimal UI initialized');
+        console.log('[MovieShows] Ultra minimal UI ready');
     }
     
     if (document.readyState === 'loading') {
@@ -334,9 +245,8 @@
         init();
     }
     
-    // Also run on window load
     window.addEventListener('load', () => {
-        setTimeout(aggressiveCleanup, 1000);
-        setTimeout(ensureVideoPlays, 1500);
+        setTimeout(ultraCleanup, 500);
+        setTimeout(ensureVideoPlays, 1000);
     });
 })();
