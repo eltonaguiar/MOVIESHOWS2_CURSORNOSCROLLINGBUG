@@ -2,7 +2,7 @@
 $ftpServer = "ftps2.50webs.com"
 $ftpUser = $env:FTP_USER
 $ftpPass = $env:FTP_PASS
-$remotePath = "findtorontoevents.ca/movieshows3"
+$remotePath = "findtorontoevents.ca/movieshows2"
 
 Write-Host "Deploying to $ftpServer/$remotePath..." -ForegroundColor Cyan
 
@@ -85,5 +85,6 @@ foreach ($svg in $svgFiles) {
 
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "Deployment complete!" -ForegroundColor Green
-Write-Host "URL: https://findtorontoevents.ca/movieshows3/" -ForegroundColor White
+Write-Host "URL: https://findtorontoevents.ca/movieshows2/" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
+

@@ -2,12 +2,17 @@
 RewriteEngine On
 RewriteBase /
 
-# Case variations of movieshows3 -> redirect to lowercase (explicit patterns, no NC flag)
+# Case variations of movieshows2 -> redirect to lowercase (explicit patterns, no NC flag)
+RewriteRule ^MovieShows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^MOVIESHOWS2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^Movieshows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^movieShows2(.*)$ /movieshows2$1 [R=301,L]
+
+# Case variations of movieshows3 -> redirect to lowercase
 RewriteRule ^MovieShows3(.*)$ /movieshows3$1 [R=301,L]
 RewriteRule ^MOVIESHOWS3(.*)$ /movieshows3$1 [R=301,L]
 RewriteRule ^Movieshows3(.*)$ /movieshows3$1 [R=301,L]
 RewriteRule ^movieShows3(.*)$ /movieshows3$1 [R=301,L]
-RewriteRule ^MoViEsHoWs3(.*)$ /movieshows3$1 [R=301,L]
 
 # API: do NOT rewrite - let api/*.php run (Google OAuth, etc.). Must come before any catch-all.
 RewriteRule ^api/ - [L]

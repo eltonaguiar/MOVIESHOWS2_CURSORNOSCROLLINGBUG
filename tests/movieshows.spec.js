@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = 'https://eltonaguiar.github.io/MOVIESHOWS2_CURSORNOSCROLLINGBUG/';
+const BASE_URL = 'https://findtorontoevents.ca/movieshows2/';
 
 test.describe('MovieShows App Tests', () => {
     
