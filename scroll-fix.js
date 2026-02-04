@@ -18,7 +18,7 @@
     let userQueue = JSON.parse(localStorage.getItem("movieshows-queue") || "[]");
     let watchedHistory = JSON.parse(localStorage.getItem("movieshows-watched") || "[]");
     let queueViewMode = localStorage.getItem("movieshows-queue-view") || "thumbnail"; // "thumbnail" or "text"
-    let queueTabMode = localStorage.getItem("movieshows-queue-tab") || "queue"; // "queue" or "watched"
+    let queueTabMode = "queue"; // Always default to queue tab showing Up Next
     
     // ========== MUTE CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
@@ -577,35 +577,48 @@
         if (!queuePanel) return;
         const content = queuePanel.querySelector(".panel-content");
         
+        console.log(`[MovieShows] updateQueuePanel called. queueTabMode=${queueTabMode}, viewMode=${queueViewMode}`);
+        
         // CRITICAL: Get the actual visible video from DOM, not from index calculation
         videoSlides = findVideoSlides();
         
-        // Better method: Find which slide is actually visible by checking the playing iframe
+        // Better method: Find which slide is actually visible
         let actualVisibleIndex = 0;
         let nowPlayingTitle = 'Unknown';
         let nowPlayingPoster = null;
         
-        // Method 1: Check which iframe is currently playing
-        const playingIframe = document.querySelector('iframe[src*="youtube"][src*="autoplay=1"]');
-        if (playingIframe) {
-            const parentSlide = playingIframe.closest('.snap-center');
-            if (parentSlide) {
-                const slideIndex = videoSlides.indexOf(parentSlide);
-                if (slideIndex >= 0) {
-                    actualVisibleIndex = slideIndex;
-                    nowPlayingTitle = parentSlide.dataset?.movieTitle || parentSlide.querySelector('h2')?.textContent || 'Unknown';
-                    nowPlayingPoster = parentSlide.querySelector('img')?.src;
-                }
-            }
+        // Method 1: Use scroll position (most reliable for snapped scrolling)
+        actualVisibleIndex = getCurrentVisibleIndex();
+        console.log(`[MovieShows] updateQueuePanel: getCurrentVisibleIndex=${actualVisibleIndex}, videoSlides.length=${videoSlides.length}`);
+        
+        // Debug: Log first few slides
+        for (let i = 0; i < Math.min(5, videoSlides.length); i++) {
+            const s = videoSlides[i];
+            const t = s.dataset?.movieTitle || s.querySelector('h2')?.textContent || 'No title';
+            console.log(`[MovieShows] videoSlides[${i}] = "${t}"`);
         }
         
-        // Method 2: Fallback to scroll position
+        if (actualVisibleIndex >= 0 && actualVisibleIndex < videoSlides.length) {
+            const slide = videoSlides[actualVisibleIndex];
+            nowPlayingTitle = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
+            nowPlayingPoster = slide.querySelector('img')?.src;
+            console.log(`[MovieShows] updateQueuePanel: Found playing video "${nowPlayingTitle}" at index ${actualVisibleIndex}`);
+        }
+        
+        // Method 2: Check which iframe is currently playing (as verification)
         if (nowPlayingTitle === 'Unknown') {
-            actualVisibleIndex = getCurrentVisibleIndex();
-            if (videoSlides[actualVisibleIndex]) {
-                const slide = videoSlides[actualVisibleIndex];
-                nowPlayingTitle = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
-                nowPlayingPoster = slide.querySelector('img')?.src;
+            const playingIframe = document.querySelector('iframe[src*="youtube"]');
+            if (playingIframe) {
+                const parentSlide = playingIframe.closest('.snap-center');
+                if (parentSlide) {
+                    const slideIndex = videoSlides.indexOf(parentSlide);
+                    if (slideIndex >= 0) {
+                        actualVisibleIndex = slideIndex;
+                        nowPlayingTitle = parentSlide.dataset?.movieTitle || parentSlide.querySelector('h2')?.textContent || 'Unknown';
+                        nowPlayingPoster = parentSlide.querySelector('img')?.src;
+                        console.log(`[MovieShows] updateQueuePanel: Found via iframe "${nowPlayingTitle}"`);
+                    }
+                }
             }
         }
         
@@ -618,6 +631,7 @@
                     actualVisibleIndex = slideIndex;
                     nowPlayingTitle = activeSlide.dataset?.movieTitle || activeSlide.querySelector('h2')?.textContent || 'Unknown';
                     nowPlayingPoster = activeSlide.querySelector('img')?.src;
+                    console.log(`[MovieShows] updateQueuePanel: Found via .active class "${nowPlayingTitle}"`);
                 }
             }
         }
@@ -970,22 +984,35 @@
             }
         });
         
-        // Add handlers for tab switching
-        content.querySelector("#tab-queue")?.addEventListener("click", () => {
-            if (queueTabMode !== 'queue') {
-                queueTabMode = 'queue';
-                localStorage.setItem("movieshows-queue-tab", queueTabMode);
-                updateQueuePanel();
-            }
-        });
-        
-        content.querySelector("#tab-watched")?.addEventListener("click", () => {
-            if (queueTabMode !== 'watched') {
-                queueTabMode = 'watched';
-                localStorage.setItem("movieshows-queue-tab", queueTabMode);
-                updateQueuePanel();
-            }
-        });
+        // Add handlers for tab switching - only once
+        if (!content.dataset.tabHandlerAttached) {
+            content.dataset.tabHandlerAttached = "true";
+            content.addEventListener("click", (e) => {
+                const target = e.target;
+                
+                // Check if clicked on Queue tab or inside it
+                const queueTab = target.closest("#tab-queue");
+                const watchedTab = target.closest("#tab-watched");
+                
+                if (queueTab) {
+                    e.stopPropagation();
+                    console.log(`[MovieShows] Queue tab clicked (delegation). Current mode: ${queueTabMode}`);
+                    queueTabMode = 'queue';
+                    localStorage.setItem("movieshows-queue-tab", queueTabMode);
+                    updateQueuePanel();
+                    return;
+                }
+                
+                if (watchedTab) {
+                    e.stopPropagation();
+                    console.log(`[MovieShows] Watched tab clicked (delegation). Current mode: ${queueTabMode}`);
+                    queueTabMode = 'watched';
+                    localStorage.setItem("movieshows-queue-tab", queueTabMode);
+                    updateQueuePanel();
+                    return;
+                }
+            });
+        }
         
         // Add handler for mark as watched button
         content.querySelector("#mark-watched-btn")?.addEventListener("click", () => {
@@ -1038,8 +1065,20 @@
         content.querySelectorAll(".up-next-item").forEach(item => {
             item.addEventListener("click", () => {
                 const idx = parseInt(item.dataset.index);
+                const itemTitle = item.querySelector('span:last-child')?.textContent || item.textContent;
+                
+                // Debug logging
+                console.log(`[MovieShows] Up-next click: index=${idx}, title="${itemTitle}"`);
+                console.log(`[MovieShows] videoSlides.length=${videoSlides.length}, currentIndex=${currentIndex}`);
+                
+                // Verify the target slide exists and has the expected title
+                if (videoSlides[idx]) {
+                    const targetTitle = videoSlides[idx].querySelector('h2')?.textContent || 'Unknown';
+                    console.log(`[MovieShows] Target slide title: "${targetTitle}"`);
+                }
+                
                 scrollToSlide(idx);
-                showToast(`Jumping to video ${idx + 1}`);
+                showToast(`Playing: ${itemTitle}`);
             });
         });
         
@@ -1051,8 +1090,10 @@
                     e.stopPropagation();
                     const index = parseInt(btn.closest(".queue-item").dataset.index);
                     const item = userQueue[index];
+                    console.log(`[MovieShows] Play queue item clicked: index=${index}, item=${item?.title}`);
                     if (item) {
                         const movie = allMoviesData.find(m => m.title === item.title) || item;
+                        console.log(`[MovieShows] Playing from queue: "${movie.title}"`);
                         closePanel(queuePanel);
                         showToast(`Playing: ${movie.title}`);
                         addMovieToFeed(movie, true, true);
@@ -2529,9 +2570,20 @@
 
     function findVideoSlides() {
         if (!scrollContainer) return [];
-        return Array.from(
-            scrollContainer.querySelectorAll('[class*="snap-center"]'),
+        // Use direct child selector to avoid matching nested snap-center elements
+        // The outer slide has class "h-full w-full snap-center"
+        // The inner wrapper has "relative ... snap-center bg-transparent"
+        // We only want the outer ones (direct children with data-movie-title)
+        const slides = Array.from(
+            scrollContainer.querySelectorAll(':scope > .snap-center[data-movie-title]'),
         );
+        // Fallback to the old selector if no results (for compatibility)
+        if (slides.length === 0) {
+            return Array.from(
+                scrollContainer.querySelectorAll(':scope > [class*="snap-center"]'),
+            );
+        }
+        return slides;
     }
 
     function clickQueuePlayButton() {
@@ -2570,18 +2622,69 @@
     function scrollToSlide(index) {
         if (!scrollContainer || index < 0 || index >= videoSlides.length) return;
 
+        console.log(`[MovieShows] scrollToSlide: index=${index}, total slides=${videoSlides.length}`);
+        
         const slideHeight = scrollContainer.clientHeight;
+        const targetTop = index * slideHeight;
+        
+        console.log(`[MovieShows] scrollToSlide: slideHeight=${slideHeight}, targetTop=${targetTop}`);
+        
         scrollContainer.scrollTo({
-            top: index * slideHeight,
+            top: targetTop,
             behavior: "smooth",
         });
 
         currentIndex = index;
         
-        // Force play video after scroll completes
+        // Force play the specific slide after scroll animation completes
         setTimeout(() => {
-            forcePlayVisibleVideos();
-        }, 500);
+            // Directly play the target slide instead of using visibility detection
+            playSlideAtIndex(index);
+        }, 600);
+    }
+    
+    // New function to directly play a specific slide by index
+    function playSlideAtIndex(index) {
+        if (index < 0 || index >= videoSlides.length) return;
+        
+        console.log(`[MovieShows] playSlideAtIndex: ${index}`);
+        
+        // Stop all other videos first
+        const allYouTubeIframes = document.querySelectorAll('iframe[src*="youtube"], iframe[data-src*="youtube"]');
+        allYouTubeIframes.forEach(iframe => {
+            const src = iframe.getAttribute('src');
+            if (src && src !== '') {
+                iframe.setAttribute('src', '');
+            }
+        });
+        
+        // Reset playing state
+        currentlyPlayingIframe = null;
+        currentlyPlayingTitle = null;
+        
+        // Get the target slide and its iframe
+        const targetSlide = videoSlides[index];
+        if (!targetSlide) {
+            console.log(`[MovieShows] playSlideAtIndex: No slide at index ${index}`);
+            return;
+        }
+        
+        const iframe = targetSlide.querySelector('iframe[data-src]');
+        if (!iframe) {
+            console.log(`[MovieShows] playSlideAtIndex: No iframe with data-src in slide ${index}`);
+            return;
+        }
+        
+        const title = targetSlide.querySelector('h2')?.textContent || 'Unknown';
+        const dataSrc = iframe.getAttribute('data-src');
+        
+        if (dataSrc) {
+            console.log(`[MovieShows] playSlideAtIndex: Playing "${title}" at index ${index}`);
+            iframe.src = dataSrc;
+            currentlyPlayingIframe = iframe;
+            currentlyPlayingTitle = title;
+            currentIndex = index;
+        }
     }
 
     function isQueuePanelOpen() {
@@ -3101,9 +3204,12 @@
         const actualIndex = getCurrentVisibleIndex();
         currentIndex = actualIndex;
         
-        // Try to use currentIndex first
-        if (actualIndex >= 0 && actualIndex < lazyIframes.length) {
-            targetIframe = lazyIframes[actualIndex];
+        // FIX: Get iframe from the actual visible slide, not by index into lazyIframes array
+        // The lazyIframes NodeList order may not match videoSlides order
+        if (actualIndex >= 0 && actualIndex < videoSlides.length) {
+            const targetSlide = videoSlides[actualIndex];
+            targetIframe = targetSlide.querySelector('iframe[data-src]');
+            console.log(`[MovieShows] forcePlayVisibleVideos - Using iframe from slide ${actualIndex}`);
         }
         
         // Fallback: find the most centered iframe
