@@ -55,6 +55,7 @@
         const btn = document.createElement("button");
         btn.id = "info-toggle";
         btn.innerHTML = infoHidden ? "📝 Show Info" : "📝 Hide Info";
+        btn.title = "Toggle movie title and description visibility";
         
         if (infoHidden) {
             document.body.classList.add("hide-movie-info");
@@ -180,6 +181,7 @@
         }
         
         updateMuteButton();
+        btn.title = "Toggle sound on/off. Click to unmute videos.";
         
         btn.addEventListener("mouseenter", () => {
             btn.style.transform = "scale(1.12)";
@@ -786,22 +788,32 @@
         let nowPlayingTitle = 'Unknown';
         let nowPlayingPoster = null;
         
-        // Method 1: Use scroll position (most reliable for snapped scrolling)
-        actualVisibleIndex = getCurrentVisibleIndex();
-        console.log(`[MovieShows] updateQueuePanel: getCurrentVisibleIndex=${actualVisibleIndex}, videoSlides.length=${videoSlides.length}`);
-        
-        // Debug: Log first few slides
-        for (let i = 0; i < Math.min(5, videoSlides.length); i++) {
-            const s = videoSlides[i];
-            const t = s.dataset?.movieTitle || s.querySelector('h2')?.textContent || 'No title';
-            console.log(`[MovieShows] videoSlides[${i}] = "${t}"`);
+        // PRIORITY Method: Use currentlyPlayingTitle if we have it (this is the actual playing video)
+        if (currentlyPlayingTitle && currentlyPlayingTitle !== 'Unknown') {
+            nowPlayingTitle = currentlyPlayingTitle;
+            // Find the index of this playing video
+            for (let i = 0; i < videoSlides.length; i++) {
+                const slideTitle = videoSlides[i].dataset?.movieTitle || videoSlides[i].querySelector('h2')?.textContent;
+                if (slideTitle === currentlyPlayingTitle) {
+                    actualVisibleIndex = i;
+                    nowPlayingPoster = videoSlides[i].querySelector('img')?.src;
+                    console.log(`[MovieShows] updateQueuePanel: Using currentlyPlayingTitle "${nowPlayingTitle}" at index ${actualVisibleIndex}`);
+                    break;
+                }
+            }
         }
         
-        if (actualVisibleIndex >= 0 && actualVisibleIndex < videoSlides.length) {
-            const slide = videoSlides[actualVisibleIndex];
-            nowPlayingTitle = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
-            nowPlayingPoster = slide.querySelector('img')?.src;
-            console.log(`[MovieShows] updateQueuePanel: Found playing video "${nowPlayingTitle}" at index ${actualVisibleIndex}`);
+        // Method 1: Use scroll position (fallback if no currentlyPlayingTitle)
+        if (nowPlayingTitle === 'Unknown') {
+            actualVisibleIndex = getCurrentVisibleIndex();
+            console.log(`[MovieShows] updateQueuePanel: getCurrentVisibleIndex=${actualVisibleIndex}, videoSlides.length=${videoSlides.length}`);
+            
+            if (actualVisibleIndex >= 0 && actualVisibleIndex < videoSlides.length) {
+                const slide = videoSlides[actualVisibleIndex];
+                nowPlayingTitle = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
+                nowPlayingPoster = slide.querySelector('img')?.src;
+                console.log(`[MovieShows] updateQueuePanel: Found playing video "${nowPlayingTitle}" at index ${actualVisibleIndex}`);
+            }
         }
         
         // Method 2: Check which iframe is currently playing (as verification)
@@ -1154,14 +1166,22 @@
             });
             
             currentIndex = bestIndex;
-            console.log(`[MovieShows] Resync: Found video at index ${bestIndex} with ${Math.round(bestVisibility * 100)}% visibility`);
+            const title = videoSlides[bestIndex]?.dataset?.movieTitle || videoSlides[bestIndex]?.querySelector('h2')?.textContent || 'Unknown';
+            console.log(`[MovieShows] Resync: Found video "${title}" at index ${bestIndex} with ${Math.round(bestVisibility * 100)}% visibility`);
             
             // Stop all videos and play only the visible one
             forceStopAllVideos();
             setTimeout(() => {
-                forcePlayVisibleVideos();
+                // CRITICAL: Update currentlyPlayingTitle BEFORE playing
+                currentlyPlayingTitle = title;
+                const targetIframe = videoSlides[bestIndex]?.querySelector('iframe[data-src]');
+                if (targetIframe) {
+                    currentlyPlayingIframe = targetIframe;
+                    playVideo(targetIframe, title);
+                } else {
+                    forcePlayVisibleVideos();
+                }
                 updateQueuePanel();
-                const title = videoSlides[bestIndex]?.dataset?.movieTitle || videoSlides[bestIndex]?.querySelector('h2')?.textContent || 'Unknown';
                 showToast(`Synced to: ${title}`);
             }, 100);
         });
@@ -3434,7 +3454,15 @@
         const style = document.createElement("style");
         style.id = "movieshows-custom-styles";
         style.textContent = `
-      /* ... (previous styles) ... */
+      /* HAMBURGER/TOP-LEFT NAV FIX - Don't block Next.js nav buttons */
+      /* Ensure top-left area elements (hamburger, settings, search) are clickable */
+      button[aria-label="Open Quick Nav"],
+      button[title="Quick Navigation"],
+      .fixed.top-4.left-4,
+      [class*="fixed"][class*="top-4"][class*="left-4"] {
+          z-index: 99999 !important;
+          pointer-events: auto !important;
+      }
       
       /* Player size control */
       #player-size-control {
@@ -4749,11 +4777,106 @@
         
         // Handle ?play= URL parameter for share links
         setTimeout(handlePlayUrlParameter, 2500);
+        
+        // Add tooltips to all buttons for better UX
+        setTimeout(addTooltipsToAllButtons, 3000);
 
         initialized = true;
         console.log(
             "[MovieShows] Ready! Scroll: wheel/arrows/J/K | Size: 1/2/3/4 keys",
         );
+    }
+    
+    // Add tooltips to all buttons for user guidance
+    function addTooltipsToAllButtons() {
+        console.log('[MovieShows] Adding tooltips to buttons...');
+        
+        // Tooltip mappings for buttons based on text content or aria-label
+        const tooltipMap = {
+            // Navigation buttons
+            'open quick nav': 'Open navigation menu to access other apps and settings',
+            'quick navigation': 'Open navigation menu to access other apps and settings',
+            // Filter buttons
+            'all': 'Show all movies and TV shows',
+            'movies': 'Filter to show only movies',
+            'tv': 'Filter to show only TV shows',
+            'now playing': 'Show currently in theaters',
+            // Action buttons
+            'like': 'Add this title to your favorites',
+            'list': 'Save this title to your watch list',
+            '+list': 'Save this title to your watch list',
+            'share': 'Share this title with friends',
+            // Search/Filter
+            'search': 'Search for movies and TV shows',
+            'filters': 'Apply filters to narrow down results',
+            // Queue buttons
+            'queue': 'View your watch queue and history',
+            'my queue': 'View your saved watch list',
+            // Settings
+            'settings': 'Adjust player settings and preferences',
+            // Playback
+            'play': 'Play this video',
+            'pause': 'Pause playback',
+            'next': 'Go to next video',
+            'previous': 'Go to previous video',
+            'skip': 'Skip to next video immediately',
+            // Sign in
+            'sign in': 'Sign in to save your preferences and watch list',
+            'login': 'Sign in to your account',
+        };
+        
+        // Find all buttons and add tooltips
+        const buttons = document.querySelectorAll('button, [role="button"], a.btn, .btn');
+        let tooltipsAdded = 0;
+        
+        buttons.forEach(btn => {
+            // Skip if already has a title
+            if (btn.title && btn.title.length > 5) return;
+            
+            const text = (btn.textContent || btn.innerText || '').toLowerCase().trim();
+            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+            const combined = text + ' ' + ariaLabel;
+            
+            // Check for matches in tooltip map
+            for (const [key, tooltip] of Object.entries(tooltipMap)) {
+                if (combined.includes(key)) {
+                    btn.title = tooltip;
+                    tooltipsAdded++;
+                    break;
+                }
+            }
+            
+            // Special handling for icon-only buttons
+            if (!btn.title) {
+                // Search icon
+                if (btn.querySelector('svg path[d*="21 21l-6-6"]') || combined.includes('search')) {
+                    btn.title = 'Search for movies and TV shows';
+                    tooltipsAdded++;
+                }
+                // Hamburger/menu icon (3 lines)
+                else if (btn.querySelectorAll('span.bg-white.rounded-full').length === 3) {
+                    btn.title = 'Open navigation menu';
+                    tooltipsAdded++;
+                }
+                // Heart/like icon
+                else if (btn.querySelector('svg path[d*="M4.318 6.318"]')) {
+                    btn.title = 'Add to favorites';
+                    tooltipsAdded++;
+                }
+                // Plus/add icon  
+                else if (btn.querySelector('svg path[d*="M12 4v16m8-8H4"]')) {
+                    btn.title = 'Add to watch list';
+                    tooltipsAdded++;
+                }
+                // Share icon
+                else if (btn.querySelector('svg path[d*="M8.684 13.342"]')) {
+                    btn.title = 'Share this title';
+                    tooltipsAdded++;
+                }
+            }
+        });
+        
+        console.log(`[MovieShows] Added ${tooltipsAdded} tooltips to buttons`);
     }
 
     function setupMutationObserver() {
