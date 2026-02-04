@@ -4902,13 +4902,89 @@
         );
     }
     
-    // Create hamburger menu button and navigation panel (since Next.js doesn't render one)
+    // Wire up the existing hamburger button from the HTML (or create one if missing)
     function fixHamburgerButton() {
-        console.log('[MovieShows] Creating hamburger menu...');
+        console.log('[MovieShows] Wiring up hamburger menu...');
         
-        // Check if we already created it
+        // Check if we already wired it up
+        if (window._hamburgerWired) {
+            console.log('[MovieShows] Hamburger already wired');
+            return;
+        }
+        
+        // Find the EXISTING hamburger button in the HTML
+        const existingHamburger = document.querySelector('button[aria-label="Open Quick Nav"]') 
+            || document.querySelector('button[title="Quick Navigation"]')
+            || document.querySelector('.fixed.top-4.left-4');
+        
+        // Find the EXISTING menu overlay and drawer in the HTML
+        const existingOverlay = document.querySelector('.fixed.inset-0.z-\\[250\\]') 
+            || document.querySelector('[class*="fixed"][class*="inset-0"][class*="bg-black"]');
+        const existingDrawer = document.querySelector('.fixed.top-0.left-0.h-full.w-80') 
+            || document.querySelector('[class*="fixed"][class*="left-0"][class*="h-full"]');
+        
+        if (existingHamburger && existingOverlay && existingDrawer) {
+            console.log('[MovieShows] Found existing hamburger, overlay, and drawer - wiring them up!');
+            
+            // Find the close button in the drawer
+            const closeBtn = existingDrawer.querySelector('button[aria-label="Close menu"]') 
+                || existingDrawer.querySelector('button svg[class*="x"]')?.closest('button')
+                || existingDrawer.querySelector('button');
+            
+            let isOpen = false;
+            
+            const openMenu = () => {
+                isOpen = true;
+                existingOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                existingOverlay.classList.add('opacity-100', 'pointer-events-auto');
+                existingDrawer.classList.remove('-translate-x-full');
+                existingDrawer.classList.add('translate-x-0');
+                console.log('[MovieShows] Menu opened');
+            };
+            
+            const closeMenu = () => {
+                isOpen = false;
+                existingOverlay.classList.add('opacity-0', 'pointer-events-none');
+                existingOverlay.classList.remove('opacity-100', 'pointer-events-auto');
+                existingDrawer.classList.add('-translate-x-full');
+                existingDrawer.classList.remove('translate-x-0');
+                console.log('[MovieShows] Menu closed');
+            };
+            
+            // Wire up hamburger click
+            existingHamburger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                console.log('[MovieShows] Existing hamburger clicked');
+                if (isOpen) {
+                    closeMenu();
+                } else {
+                    openMenu();
+                }
+            });
+            
+            // Wire up overlay click to close
+            existingOverlay.addEventListener('click', (e) => {
+                if (e.target === existingOverlay) {
+                    closeMenu();
+                }
+            });
+            
+            // Wire up close button if found
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeMenu);
+            }
+            
+            window._hamburgerWired = true;
+            console.log('[MovieShows] Existing hamburger menu wired successfully');
+            return;
+        }
+        
+        console.log('[MovieShows] No existing hamburger found - creating new one');
+        
+        // If no existing hamburger, create our own (fallback)
         if (document.getElementById('movieshows-hamburger')) {
-            console.log('[MovieShows] Hamburger already exists');
+            console.log('[MovieShows] Custom hamburger already exists');
             return;
         }
         
@@ -5102,7 +5178,6 @@
                             scrollToSlide(0);
                             break;
                         case 'search':
-                            document.querySelector('button')?.click(); // trigger search
                             const searchBtn = Array.from(document.querySelectorAll('button')).find(b => 
                                 b.textContent?.toLowerCase().includes('search') || 
                                 b.textContent?.toLowerCase().includes('browse')
@@ -5151,6 +5226,7 @@
             });
         });
         
+        window._hamburgerWired = true;
         console.log('[MovieShows] Hamburger menu created successfully');
     }
     
