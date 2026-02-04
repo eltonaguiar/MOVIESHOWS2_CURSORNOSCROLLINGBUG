@@ -651,7 +651,12 @@
     }
     
     function createMovieCard(movie) {
-        const posterUrl = movie.posterUrl || movie.image || `https://via.placeholder.com/150x225/1a1a2e/ffffff?text=${encodeURIComponent(movie.title?.substring(0,10) || 'Movie')}`;
+        const getCardPlaceholder = (text, w, h) => {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="#1a1a2e"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#888" font-size="14" font-family="Arial">${text}</text></svg>`;
+            return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        };
+        const posterUrl = movie.posterUrl || movie.image || getCardPlaceholder(movie.title?.substring(0,10) || 'Movie', 150, 225);
+        const fallbackPoster = getCardPlaceholder('No Image', 150, 225);
         return `
             <div class="movie-card" data-title="${movie.title || ''}" style="
                 cursor: pointer;
@@ -663,7 +668,7 @@
             " onmouseenter="this.style.transform='scale(1.03)';this.style.borderColor='#22c55e'" 
                onmouseleave="this.style.transform='scale(1)';this.style.borderColor='rgba(255,255,255,0.1)'">
                 <img src="${posterUrl}" alt="${movie.title}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover;" 
-                    onerror="this.src='https://via.placeholder.com/150x225/1a1a2e/ffffff?text=No+Image'">
+                    onerror="this.src='${fallbackPoster}'">
                 <div style="padding: 10px;">
                     <h4 style="color: white; font-size: 13px; font-weight: 600; margin: 0 0 4px 0; 
                         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${movie.title || 'Unknown'}</h4>
@@ -923,10 +928,14 @@
             return null;
         };
         
-        // Generate a placeholder image URL with the title's first letter
+        // Generate a placeholder image as inline SVG data URL (no external dependency)
         const getPlaceholderUrl = (title, width = 50, height = 75, color = '666') => {
             const letter = title?.charAt(0)?.toUpperCase() || '?';
-            return `https://via.placeholder.com/${width}x${height}/1a1a2e/${color}?text=${encodeURIComponent(letter)}`;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+                <rect width="100%" height="100%" fill="#1a1a2e"/>
+                <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#${color}" font-size="${Math.min(width, height) * 0.5}" font-family="Arial, sans-serif" font-weight="bold">${letter}</text>
+            </svg>`;
+            return `data:image/svg+xml,${encodeURIComponent(svg)}`;
         };
         
         // Build playlist with deduplication
@@ -3994,11 +4003,22 @@
                 const size = localStorage.getItem("movieshows-player-size") || "large";
                 applyPlayerSize(size);
 
-                // FORCE PLAY: bypass observer delay
+                // FORCE PLAY with sound: user explicitly chose this video
                 const iframe = slide.querySelector('iframe');
                 if (iframe && iframe.dataset.src) {
-                    console.log("[MovieShows] Force playing video...");
-                    iframe.src = iframe.dataset.src;
+                    console.log("[MovieShows] Force playing video (user selection)...");
+                    // Stop all other videos first
+                    forceStopAllVideos();
+                    // Play with sound - user explicitly selected this
+                    isMuted = false;
+                    localStorage.setItem("movieshows-muted", "false");
+                    const title = movie.title || 'Unknown';
+                    currentlyPlayingTitle = title;
+                    currentlyPlayingIframe = iframe;
+                    playVideo(iframe, title);
+                    updateMuteControl();
+                    removeCenterMuteOverlay();
+                    console.log("[MovieShows] User-selected video playing with sound");
                 }
             }, 100);
         }
