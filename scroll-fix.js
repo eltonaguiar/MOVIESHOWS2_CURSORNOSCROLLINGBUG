@@ -499,7 +499,7 @@
         
         // Search input
         const searchBox = document.createElement("div");
-        searchBox.style.cssText = "margin-bottom: 20px;";
+        searchBox.style.cssText = "margin-bottom: 16px;";
         searchBox.innerHTML = `
             <div style="position: relative;">
                 <input type="text" id="movie-search-input" placeholder="Search movies & shows..." 
@@ -513,6 +513,52 @@
             </div>
         `;
         content.appendChild(searchBox);
+        
+        // Filter buttons (Movies / TV / All)
+        const filterBox = document.createElement("div");
+        filterBox.id = "search-filter-box";
+        filterBox.style.cssText = "display: flex; gap: 8px; margin-bottom: 16px;";
+        filterBox.innerHTML = `
+            <button id="search-filter-all" class="search-filter-btn ${currentFilter === 'all' ? 'active' : ''}" 
+                style="flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; 
+                background: ${currentFilter === 'all' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.05)'}; 
+                color: ${currentFilter === 'all' ? '#22c55e' : '#888'}; cursor: pointer; font-weight: bold;
+                transition: all 0.2s;" title="Show all content">
+                📺 All
+            </button>
+            <button id="search-filter-movies" class="search-filter-btn ${currentFilter === 'movies' ? 'active' : ''}" 
+                style="flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; 
+                background: ${currentFilter === 'movies' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.05)'}; 
+                color: ${currentFilter === 'movies' ? '#22c55e' : '#888'}; cursor: pointer; font-weight: bold;
+                transition: all 0.2s;" title="Show only movies">
+                🎬 Movies
+            </button>
+            <button id="search-filter-tv" class="search-filter-btn ${currentFilter === 'tv' ? 'active' : ''}" 
+                style="flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; 
+                background: ${currentFilter === 'tv' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.05)'}; 
+                color: ${currentFilter === 'tv' ? '#22c55e' : '#888'}; cursor: pointer; font-weight: bold;
+                transition: all 0.2s;" title="Show only TV shows">
+                📺 TV Shows
+            </button>
+        `;
+        content.appendChild(filterBox);
+        
+        // Add filter button handlers
+        filterBox.querySelector("#search-filter-all").addEventListener("click", () => {
+            currentFilter = 'all';
+            updateSearchFilterButtons();
+            performSearch(document.getElementById("movie-search-input")?.value || "");
+        });
+        filterBox.querySelector("#search-filter-movies").addEventListener("click", () => {
+            currentFilter = 'movies';
+            updateSearchFilterButtons();
+            performSearch(document.getElementById("movie-search-input")?.value || "");
+        });
+        filterBox.querySelector("#search-filter-tv").addEventListener("click", () => {
+            currentFilter = 'tv';
+            updateSearchFilterButtons();
+            performSearch(document.getElementById("movie-search-input")?.value || "");
+        });
         
         // Results container
         const results = document.createElement("div");
@@ -541,6 +587,22 @@
         setTimeout(() => performSearch(""), 100);
         
         return searchPanel;
+    }
+    
+    function updateSearchFilterButtons() {
+        const filterBox = document.getElementById("search-filter-box");
+        if (!filterBox) return;
+        
+        filterBox.querySelectorAll(".search-filter-btn").forEach(btn => {
+            const isAll = btn.id === "search-filter-all" && currentFilter === 'all';
+            const isMovies = btn.id === "search-filter-movies" && currentFilter === 'movies';
+            const isTV = btn.id === "search-filter-tv" && currentFilter === 'tv';
+            const isActive = isAll || isMovies || isTV;
+            
+            btn.style.background = isActive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.05)';
+            btn.style.color = isActive ? '#22c55e' : '#888';
+            btn.style.borderColor = isActive ? '#22c55e' : 'rgba(255,255,255,0.2)';
+        });
     }
     
     function performSearch(query) {
@@ -3455,12 +3517,29 @@
         style.id = "movieshows-custom-styles";
         style.textContent = `
       /* HAMBURGER/TOP-LEFT NAV FIX - Don't block Next.js nav buttons */
-      /* Ensure top-left area elements (hamburger, settings, search) are clickable */
+      /* Create a safe zone in top-left corner for hamburger and nav buttons */
       button[aria-label="Open Quick Nav"],
       button[title="Quick Navigation"],
       .fixed.top-4.left-4,
       [class*="fixed"][class*="top-4"][class*="left-4"] {
           z-index: 99999 !important;
+          pointer-events: auto !important;
+      }
+      
+      /* CRITICAL: Make the top navigation bar area always clickable */
+      /* This ensures hamburger menu and other top-left buttons receive clicks */
+      .snap-center .absolute.inset-0,
+      .snap-center > .absolute.inset-0,
+      div[class*="absolute"][class*="inset-0"] {
+          pointer-events: none;
+      }
+      
+      /* But allow clicks on the iframe itself and bottom UI elements */
+      .snap-center iframe,
+      .snap-center .absolute.bottom-4,
+      .snap-center .absolute.right-4,
+      .snap-center [class*="bottom-4"],
+      .snap-center [class*="right-4"] {
           pointer-events: auto !important;
       }
       
