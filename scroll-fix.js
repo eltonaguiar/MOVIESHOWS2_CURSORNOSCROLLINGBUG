@@ -1379,7 +1379,16 @@
     }
     
     function updateCategoryButtons() {
-        // Update the visual state of category buttons in the original UI
+        // Calculate actual counts from data
+        const allWithTrailers = allMoviesData.filter(m => m.trailerUrl && m.trailerUrl.length > 10);
+        const moviesWithTrailers = allWithTrailers.filter(m => !m.type || m.type === 'movie' || m.type === 'Movie');
+        const tvWithTrailers = allWithTrailers.filter(m => m.type === 'tv' || m.type === 'TV' || m.type === 'series');
+        const nowPlayingWithTrailers = allWithTrailers.filter(m => 
+            m.source === 'Now Playing' || m.source === 'In Theatres' || 
+            (m.nowPlaying && m.nowPlaying.length > 0)
+        );
+        
+        // Update the visual state and counts of category buttons
         const buttons = document.querySelectorAll("button");
         buttons.forEach(btn => {
             const text = btn.textContent?.toLowerCase() || "";
@@ -1389,6 +1398,18 @@
                 (currentFilter === 'tv' && text.includes("tv (")) ||
                 (currentFilter === 'nowplaying' && text.includes("now playing"));
             
+            // Update counts in button text
+            if (text.includes("all (")) {
+                btn.textContent = `All (${allWithTrailers.length})`;
+            } else if (text.includes("movies (")) {
+                btn.textContent = `Movies (${moviesWithTrailers.length})`;
+            } else if (text.includes("tv (")) {
+                btn.textContent = `TV (${tvWithTrailers.length})`;
+            } else if (text.includes("now playing")) {
+                btn.textContent = `Now Playing (${nowPlayingWithTrailers.length})`;
+            }
+            
+            // Update visual styling
             if (text.includes("all (") || text.includes("movies (") || text.includes("tv (") || text.includes("now playing")) {
                 if (isActive) {
                     btn.style.background = "#22c55e";
@@ -2201,6 +2222,9 @@
                     // CRITICAL: Expose to window for thumbnail lookups and other features
                     window.allMoviesData = items;
                     console.log(`[MovieShows] SUCCESS: Loaded ${items.length} items. Data exposed to window.allMoviesData`);
+
+                    // Update category button counts with real data
+                    setTimeout(() => updateCategoryButtons(), 100);
 
                     // Immediately hydrate the UI
                     ensureMinimumCount(20);
