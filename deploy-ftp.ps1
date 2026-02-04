@@ -28,6 +28,7 @@ $rootFiles = @(
     "features-batch12.js",
     "features-batch13.js",
     "ui-cleanup.js",
+    "ui-minimal.js",
     "FUTURE.html",
     "movies-database.json",
     "favicon.ico",
