@@ -21,6 +21,10 @@ npm-debug.log*
 .env.local
 .env.*.local
 
+# Local config files with secrets
+api/google_config.local.php
+**/google_config.local.php
+
 # Temporary files
 *.tmp
 *.temp

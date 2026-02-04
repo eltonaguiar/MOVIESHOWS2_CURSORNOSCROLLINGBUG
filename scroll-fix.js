@@ -2202,9 +2202,10 @@
             }
         });
         
-        // Google login (simulated for now)
+        // Google login - opens Google OAuth
         popup.querySelector("#google-login-btn").addEventListener("click", () => {
-            showToast("Google login coming soon! Use email for now.", true);
+            initiateGoogleLogin();
+            overlay.remove();
         });
         
         // Guest login
@@ -2339,6 +2340,67 @@
         if (window.MovieShowsDB?.isConnected) {
             console.log("[MovieShows] Syncing user data to database...");
             // Future: implement full sync
+        }
+    }
+    
+    // ========== GOOGLE OAUTH ==========
+    
+    const GOOGLE_CLIENT_ID = '975574174292-n332bled0ud1bc51v1hcqpnmp8dass12.apps.googleusercontent.com';
+    const GOOGLE_REDIRECT_URI = 'https://findtorontoevents.ca/movieshows2/api/google_callback.php';
+    
+    function initiateGoogleLogin() {
+        // Build Google OAuth URL
+        const params = new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            redirect_uri: GOOGLE_REDIRECT_URI,
+            response_type: 'code',
+            scope: 'email profile',
+            access_type: 'online',
+            prompt: 'select_account',
+            state: '/movieshows2/'
+        });
+        
+        const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+        
+        // Open Google login in same window
+        window.location.href = googleAuthUrl;
+    }
+    
+    function checkGoogleAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Check for successful Google auth
+        const googleAuthData = urlParams.get('google_auth');
+        if (googleAuthData) {
+            try {
+                const userData = JSON.parse(atob(googleAuthData));
+                if (userData && userData.email) {
+                    currentUser = userData;
+                    localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
+                    
+                    // Clean up URL
+                    const cleanUrl = window.location.origin + window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+                    
+                    // Update UI
+                    if (window.updateLoginButton) window.updateLoginButton();
+                    showToast(`Welcome, ${userData.name}! 🎉`);
+                    
+                    console.log("[MovieShows] Google login successful:", userData.email);
+                }
+            } catch (e) {
+                console.error("[MovieShows] Failed to parse Google auth data:", e);
+            }
+        }
+        
+        // Check for Google auth error
+        const googleError = urlParams.get('google_error');
+        if (googleError) {
+            showToast("Google login failed: " + googleError, true);
+            
+            // Clean up URL
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
         }
     }
     
@@ -3999,6 +4061,7 @@
         createPlayerSizeControl();
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
+        checkGoogleAuthCallback();  // Check for Google OAuth callback
         createLoginButton();  // Add login/profile button
         createInfoToggle();   // Toggle movie info visibility
         createActionPanelToggle(); // Toggle right action panel
