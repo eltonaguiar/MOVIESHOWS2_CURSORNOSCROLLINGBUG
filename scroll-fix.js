@@ -115,31 +115,36 @@
         const updateMuteButton = () => {
             if (isMuted) {
                 btn.innerHTML = "🔇 Click to Unmute";
-                btn.style.background = "rgba(239, 68, 68, 0.9)"; // Red when muted
+                btn.style.background = "rgba(239, 68, 68, 0.95)"; // Red when muted
                 btn.style.borderColor = "#ef4444";
+                btn.style.animation = "pulse-mute 1.5s infinite";
             } else {
                 btn.innerHTML = "🔊 Sound On";
                 btn.style.background = "rgba(34, 197, 94, 0.9)"; // Green when unmuted
                 btn.style.borderColor = "#22c55e";
+                btn.style.animation = "none";
             }
+            // Also update any center overlay
+            updateCenterMuteOverlay();
         };
         
         btn.style.cssText = `
             position: fixed;
             bottom: 20px;
             left: 20px;
-            z-index: 10000;
+            z-index: 10001;
             color: white;
-            border: 2px solid #ef4444;
-            padding: 14px 24px;
-            border-radius: 25px;
+            border: 3px solid #ef4444;
+            padding: 16px 28px;
+            border-radius: 30px;
             cursor: pointer;
-            font-size: 15px;
+            font-size: 17px;
             font-weight: bold;
             backdrop-filter: blur(10px);
             transition: all 0.2s;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            animation: ${isMuted ? 'pulse-mute 2s infinite' : 'none'};
+            box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5);
+            animation: pulse-mute 1.5s infinite;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         `;
         
         // Add pulse animation for muted state
@@ -148,8 +153,13 @@
             style.id = "mute-animation-style";
             style.textContent = `
                 @keyframes pulse-mute {
-                    0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
-                    50% { transform: scale(1.05); box-shadow: 0 4px 25px rgba(239, 68, 68, 0.6); }
+                    0%, 100% { transform: scale(1); box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5); }
+                    50% { transform: scale(1.08); box-shadow: 0 8px 35px rgba(239, 68, 68, 0.8); }
+                }
+                @keyframes bounce-attention {
+                    0%, 20%, 50%, 80%, 100% { transform: translateY(0) scale(1); }
+                    40% { transform: translateY(-15px) scale(1.1); }
+                    60% { transform: translateY(-8px) scale(1.05); }
                 }
             `;
             document.head.appendChild(style);
@@ -158,26 +168,143 @@
         updateMuteButton();
         
         btn.addEventListener("mouseenter", () => {
-            btn.style.transform = "scale(1.08)";
+            btn.style.transform = "scale(1.12)";
+            btn.style.animation = "none";
         });
         btn.addEventListener("mouseleave", () => {
-            btn.style.transform = isMuted ? "" : "scale(1)";
+            btn.style.transform = "";
+            if (isMuted) btn.style.animation = "pulse-mute 1.5s infinite";
         });
         
         btn.addEventListener("click", () => {
-            isMuted = !isMuted;
-            localStorage.setItem("movieshows-muted", isMuted ? "true" : "false");
-            updateMuteButton();
-            btn.style.animation = isMuted ? 'pulse-mute 2s infinite' : 'none';
-            applyMuteStateToAllVideos();
-            console.log(`[MovieShows] Sound ${isMuted ? 'muted' : 'unmuted'}`);
-            
-            // Show toast notification
-            showToast(isMuted ? "Sound muted" : "Sound enabled!");
+            toggleMute();
         });
         
         document.body.appendChild(btn);
         console.log("[MovieShows] Mute control created");
+        
+        // Create center screen overlay for first-time users when muted
+        createCenterMuteOverlay();
+    }
+    
+    function toggleMute() {
+        isMuted = !isMuted;
+        localStorage.setItem("movieshows-muted", isMuted ? "true" : "false");
+        
+        // Update bottom-left button
+        const btn = document.getElementById("mute-control");
+        if (btn) {
+            if (isMuted) {
+                btn.innerHTML = "🔇 Click to Unmute";
+                btn.style.background = "rgba(239, 68, 68, 0.95)";
+                btn.style.borderColor = "#ef4444";
+                btn.style.animation = "pulse-mute 1.5s infinite";
+            } else {
+                btn.innerHTML = "🔊 Sound On";
+                btn.style.background = "rgba(34, 197, 94, 0.9)";
+                btn.style.borderColor = "#22c55e";
+                btn.style.animation = "none";
+            }
+        }
+        
+        applyMuteStateToAllVideos();
+        updateCenterMuteOverlay();
+        console.log(`[MovieShows] Sound ${isMuted ? 'muted' : 'unmuted'}`);
+        showToast(isMuted ? "Sound muted" : "Sound enabled!");
+    }
+    
+    function createCenterMuteOverlay() {
+        if (document.getElementById("center-mute-overlay")) return;
+        
+        const overlay = document.createElement("div");
+        overlay.id = "center-mute-overlay";
+        overlay.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                <div style="font-size: 64px; line-height: 1;">🔇</div>
+                <div style="font-size: 22px; font-weight: bold;">Audio is Muted</div>
+                <button id="center-unmute-btn" style="
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    padding: 18px 40px;
+                    border-radius: 30px;
+                    font-size: 20px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
+                ">🔊 Click to Enable Sound</button>
+                <div style="font-size: 13px; opacity: 0.7; margin-top: 5px;">or press M key</div>
+            </div>
+        `;
+        overlay.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10002;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 40px 50px;
+            border-radius: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 50px rgba(0,0,0,0.7);
+            display: ${isMuted ? 'block' : 'none'};
+            animation: fadeIn 0.3s ease;
+        `;
+        
+        // Add fade animation
+        if (!document.getElementById("fade-animation-style")) {
+            const style = document.createElement("style");
+            style.id = "fade-animation-style";
+            style.textContent = `
+                @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+                @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(overlay);
+        
+        // Add click handler to unmute button
+        const unmuteBtn = document.getElementById("center-unmute-btn");
+        if (unmuteBtn) {
+            unmuteBtn.addEventListener("click", () => {
+                toggleMute();
+            });
+            unmuteBtn.addEventListener("mouseenter", () => {
+                unmuteBtn.style.transform = "scale(1.05)";
+                unmuteBtn.style.background = "#dc2626";
+            });
+            unmuteBtn.addEventListener("mouseleave", () => {
+                unmuteBtn.style.transform = "scale(1)";
+                unmuteBtn.style.background = "#ef4444";
+            });
+        }
+        
+        // Also allow clicking anywhere on overlay to dismiss (but not unmute)
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) {
+                // User clicked outside the button - just hide overlay temporarily
+                overlay.style.display = "none";
+                // Show it again after 30 seconds if still muted
+                setTimeout(() => {
+                    if (isMuted && overlay) {
+                        overlay.style.display = "block";
+                    }
+                }, 30000);
+            }
+        });
+        
+        console.log("[MovieShows] Center mute overlay created");
+    }
+    
+    function updateCenterMuteOverlay() {
+        const overlay = document.getElementById("center-mute-overlay");
+        if (overlay) {
+            overlay.style.display = isMuted ? "block" : "none";
+        }
     }
     
     function applyMuteStateToAllVideos() {
@@ -2830,6 +2957,11 @@
             case "4":
                 setPlayerSize("full");
                 localStorage.setItem("movieshows-player-size", "full");
+                return;
+            case "m":
+            case "M":
+                toggleMute();
+                e.preventDefault();
                 return;
         }
 
