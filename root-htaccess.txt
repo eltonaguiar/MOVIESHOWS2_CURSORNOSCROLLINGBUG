@@ -1,0 +1,76 @@
+# findtorontoevents.ca - document root .htaccess
+RewriteEngine On
+RewriteBase /
+
+# =============================================
+# MovieShows2 - Case insensitive redirects
+# All variations redirect to lowercase /movieshows2/
+# =============================================
+RewriteRule ^MovieShows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^MOVIESHOWS2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^Movieshows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^movieShows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^MOVIEshows2(.*)$ /movieshows2$1 [R=301,L]
+RewriteRule ^moviesHOWS2(.*)$ /movieshows2$1 [R=301,L]
+
+# MovieShows3 - Case insensitive redirects
+RewriteRule ^MovieShows3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^MOVIESHOWS3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^Movieshows3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^movieShows3(.*)$ /movieshows3$1 [R=301,L]
+
+# =============================================
+# API: do NOT rewrite - let api/*.php run
+# =============================================
+RewriteRule ^api/ - [L]
+
+# Redirect exposed internal server path to canonical root
+RewriteRule ^services/users/ / [R=301,L]
+
+# Stats page
+RewriteRule ^stats/?$ stats/index.html [L]
+
+# Legacy redirects
+RewriteRule ^debug/?$ /stats/ [R=301,L]
+RewriteRule ^info/?$ /stats/ [R=301,L]
+RewriteRule ^details/?$ /stats/ [R=301,L]
+RewriteRule ^events/?$ /stats/ [R=301,L]
+RewriteRule ^events_summary/?$ /stats/ [R=301,L]
+
+# Static files passthrough
+RewriteRule ^_next/static/ - [L]
+RewriteRule ^next/_next/ - [L]
+
+# Root redirect
+RewriteRule ^$ index.html [R=301,L]
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    RewriteCond %{REQUEST_URI} ^/_next/
+    RewriteRule ^_next/(.*)$ _next/$1 [L]
+    
+    RewriteCond %{REQUEST_URI} ^/next/_next/
+    RewriteRule ^next/_next/(.*)$ next/_next/$1 [L]
+</IfModule>
+
+# Security
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>
