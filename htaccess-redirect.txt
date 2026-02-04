@@ -1,0 +1,8 @@
+# Case-insensitive redirect for movieshows3
+RewriteEngine On
+RewriteBase /
+
+# Redirect any case variation of MovieShows3 to lowercase
+RewriteCond %{REQUEST_URI} ^/[Mm][Oo][Vv][Ii][Ee][Ss][Hh][Oo][Ww][Ss]3(.*)$ [NC]
+RewriteCond %{REQUEST_URI} !^/movieshows3 
+RewriteRule ^(.*)$ /movieshows3%1 [R=301,L]

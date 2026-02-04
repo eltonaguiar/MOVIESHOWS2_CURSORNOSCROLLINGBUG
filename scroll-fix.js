@@ -1907,7 +1907,9 @@
 
                 if (Array.isArray(items) && items.length > 0) {
                     allMoviesData = items;
-                    console.log(`[MovieShows] SUCCESS: Loaded ${items.length} items.`);
+                    // CRITICAL: Expose to window for thumbnail lookups and other features
+                    window.allMoviesData = items;
+                    console.log(`[MovieShows] SUCCESS: Loaded ${items.length} items. Data exposed to window.allMoviesData`);
 
                     // Immediately hydrate the UI
                     ensureMinimumCount(20);

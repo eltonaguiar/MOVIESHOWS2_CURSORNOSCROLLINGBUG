@@ -1,0 +1,67 @@
+# findtorontoevents.ca - document root .htaccess
+RewriteEngine On
+RewriteBase /
+
+# Case variations of movieshows3 -> redirect to lowercase (explicit patterns, no NC flag)
+RewriteRule ^MovieShows3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^MOVIESHOWS3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^Movieshows3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^movieShows3(.*)$ /movieshows3$1 [R=301,L]
+RewriteRule ^MoViEsHoWs3(.*)$ /movieshows3$1 [R=301,L]
+
+# API: do NOT rewrite - let api/*.php run (Google OAuth, etc.). Must come before any catch-all.
+RewriteRule ^api/ - [L]
+
+# Redirect exposed internal server path to canonical root (info disclosure fix)
+RewriteRule ^services/users/ / [R=301,L]
+
+# Stats page at /stats (root): serve stats/index.html
+RewriteRule ^stats/?$ stats/index.html [L]
+
+# Redirect legacy/alias URLs to stats (events count, sources, summary)
+RewriteRule ^debug/?$ /stats/ [R=301,L]
+RewriteRule ^info/?$ /stats/ [R=301,L]
+RewriteRule ^details/?$ /stats/ [R=301,L]
+RewriteRule ^events/?$ /stats/ [R=301,L]
+RewriteRule ^events_summary/?$ /stats/ [R=301,L]
+
+# Chunk JS: serve directly from next/_next/ (ModSecurity bypass via next/_next/static/chunks/.htaccess)
+RewriteRule ^_next/static/ - [L]
+# Pass through next/_next/ so files are served from next/_next/ (not rewritten to _next/)
+RewriteRule ^next/_next/ - [L]
+
+RewriteRule ^$ index.html [R=301,L]
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Serve _next directly - CRITICAL: EXACT MATCH
+    RewriteCond %{REQUEST_URI} ^/_next/
+    RewriteRule ^_next/(.*)$ _next/$1 [L]
+
+    # Serve next/_next (dual path)
+    RewriteCond %{REQUEST_URI} ^/next/_next/
+    RewriteRule ^next/_next/(.*)$ next/_next/$1 [L]
+</IfModule>
+
+# Disable default indexes, protect internal files
+Options -Indexes
+
+# Content security
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Efficient caching for static files
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>
