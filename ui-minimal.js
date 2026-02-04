@@ -35,7 +35,13 @@
         });
         
         // Hide buttons with these names everywhere
-        const hideButtonNames = ['like', 'save', 'open', 'share', 'next up', 'similar', 'broken', 'hype', 'thought', 'boring', 'emotional', 'next description', 'hide', 'list', 'player:', 'txt', 'dt'];
+        const hideButtonNames = [
+            'like', 'save', 'open', 'share', 'next up', 'similar', 'broken', 
+            'hype', 'thought', 'boring', 'emotional', 'next description', 
+            'hide', 'list', 'player:', 'txt', 'dt', 'movie fan', 'shuffle',
+            'stats', 'badges', 'mood', 'coming soon', 'sound on', 'sound off',
+            'autoplay', 'bar:', 'full', 'title', 'high', 'mid', 'def'
+        ];
         document.querySelectorAll('button').forEach(btn => {
             const text = (btn.textContent || '').toLowerCase().trim();
             if (hideButtonNames.some(name => text === name || text.includes(name))) {
@@ -46,14 +52,37 @@
         // Hide the settings panel on the right side
         document.querySelectorAll('div').forEach(div => {
             const style = div.getAttribute('style') || '';
+            const text = div.textContent || '';
+            
+            // Hide fixed right panels
             if (style.includes('fixed') && style.includes('right') && !div.id?.includes('mute')) {
-                // Check if it's the settings panel
-                const hasPlayerButtons = div.textContent?.toLowerCase().includes('player') || 
-                                         div.textContent?.toLowerCase().includes('hide') ||
-                                         div.textContent?.includes('S') && div.textContent?.includes('M') && div.textContent?.includes('L');
-                if (hasPlayerButtons) {
-                    div.style.display = 'none';
+                div.style.display = 'none';
+            }
+            
+            // Hide panels with settings-like content
+            if (text.includes('Player:') || text.includes('Txt:') || text.includes('Bar:') || 
+                text.includes('Autoplay') || (text.includes('S') && text.includes('M') && text.includes('L') && text.includes('Full'))) {
+                div.style.display = 'none';
+            }
+        });
+        
+        // Hide bottom bar buttons (Mood, Shuffle, Stats, Badges, etc)
+        document.querySelectorAll('button').forEach(btn => {
+            const text = (btn.textContent || '').toLowerCase();
+            const bottomBarButtons = ['mood', 'shuffle', 'stats', 'badges', 'coming soon', 'movie fan', 'sound on', 'sound off'];
+            if (bottomBarButtons.some(b => text.includes(b))) {
+                // Keep only the mute button
+                if (!text.includes('unmute') && btn.id !== 'mute-control') {
+                    btn.style.display = 'none';
                 }
+            }
+        });
+        
+        // Hide Like, List, Share buttons at bottom left
+        document.querySelectorAll('button').forEach(btn => {
+            const text = (btn.textContent || '').trim().toLowerCase();
+            if (text === 'like' || text === 'list' || text === 'share') {
+                btn.style.display = 'none';
             }
         });
         
@@ -167,8 +196,30 @@
                 display: none !important;
             }
             
-            /* Hide the right side settings panel */
-            div[style*="position: fixed"][style*="right"] {
+            /* Hide the right side settings panel - AGGRESSIVE */
+            div[style*="position: fixed"][style*="right"],
+            div[style*="position:fixed"][style*="right"],
+            [class*="settings"],
+            [class*="control-panel"],
+            [id*="settings"],
+            [id*="control"] {
+                display: none !important;
+            }
+            
+            /* Hide ALL the extra feature buttons */
+            button:not(#mute-control):not([class*="category"]):not([class*="filter"]) {
+                /* Will be selectively shown */
+            }
+            
+            /* Hide specific buttons by content */
+            button[title*="Movie Fan"],
+            button[title*="Shuffle"],
+            button[title*="Stats"],
+            button[title*="Badges"],
+            button[title*="Mood"],
+            button[title*="Coming"],
+            button[title*="Hide"],
+            button[title*="Settings"] {
                 display: none !important;
             }
             
