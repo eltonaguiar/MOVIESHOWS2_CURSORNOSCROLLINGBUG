@@ -221,7 +221,17 @@
     }
     
     function createCenterMuteOverlay() {
-        if (document.getElementById("center-mute-overlay")) return;
+        // Remove existing to recreate fresh
+        const existingOverlay = document.getElementById("center-mute-overlay");
+        if (existingOverlay) existingOverlay.remove();
+        
+        // Only create if actually muted
+        if (!isMuted) {
+            console.log("[MovieShows] Sound not muted, skipping overlay");
+            return;
+        }
+        
+        console.log("[MovieShows] Creating center mute overlay (muted state: " + isMuted + ")");
         
         const overlay = document.createElement("div");
         overlay.id = "center-mute-overlay";
@@ -265,7 +275,7 @@
             text-align: center;
             backdrop-filter: blur(15px);
             box-shadow: 0 15px 60px rgba(0,0,0,0.8);
-            display: ${isMuted ? 'block' : 'none'};
+            display: block;
             animation: fadeIn 0.3s ease;
             border: 2px solid rgba(239, 68, 68, 0.5);
         `;
@@ -346,8 +356,18 @@
     
     function updateCenterMuteOverlay() {
         const overlay = document.getElementById("center-mute-overlay");
-        if (overlay) {
-            overlay.style.display = isMuted ? "block" : "none";
+        if (isMuted) {
+            // If muted and overlay doesn't exist, create it
+            if (!overlay) {
+                createCenterMuteOverlay();
+            } else {
+                overlay.style.display = "block";
+            }
+        } else {
+            // If not muted, hide the overlay
+            if (overlay) {
+                overlay.style.display = "none";
+            }
         }
     }
     
@@ -1552,18 +1572,31 @@
                     }, true);
                 }
                 
-                // List/Save button
-                if (text === "list" || text === "save") {
+                // List/Save button - check for various button text patterns
+                if (text === "list" || text === "save" || text === "+list" || text.includes("list") || text.includes("save")) {
+                    // Skip if it's a different button type (filter, share, etc.)
+                    if (text.includes("filter") || text.includes("search") || text.includes("share")) return;
+                    
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        
+                        console.log("[MovieShows] List button clicked");
+                        
                         const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
                         if (slide) {
                             const title = slide.querySelector("h2")?.textContent || slide.getAttribute("data-movie-title");
+                            console.log("[MovieShows] Adding to queue:", title);
                             if (title) {
                                 const movie = allMoviesData.find(m => m.title === title);
-                                if (movie) addToQueue(movie);
+                                if (movie) {
+                                    addToQueue(movie);
+                                } else {
+                                    // Fallback: create minimal movie object from slide data
+                                    addToQueue({ title: title });
+                                }
                             }
                         }
                     }, true);
@@ -2054,6 +2087,11 @@
         window.updateLoginButton = updateButtonDisplay;
     }
     
+    // Auth API base URL
+    const AUTH_API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? '/api/auth.php'
+        : 'https://findtorontoevents.ca/movieshows2/api/auth.php';
+    
     function showLoginPopup() {
         // Remove existing popup
         const existing = document.getElementById("login-popup-overlay");
@@ -2073,25 +2111,55 @@
             align-items: center;
             justify-content: center;
             backdrop-filter: blur(5px);
+            overflow-y: auto;
+            padding: 20px;
         `;
         
         const popup = document.createElement("div");
         popup.style.cssText = `
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             border-radius: 24px;
-            padding: 40px;
+            padding: 30px;
             width: 90%;
             max-width: 400px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
             position: relative;
+            max-height: 90vh;
+            overflow-y: auto;
+        `;
+        
+        const inputStyle = `
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            margin-bottom: 10px;
+        `;
+        
+        const btnPrimaryStyle = `
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
         `;
         
         popup.innerHTML = `
             <button id="close-login-popup" style="
                 position: absolute;
-                top: 15px;
-                right: 15px;
+                top: 12px;
+                right: 12px;
                 background: none;
                 border: none;
                 color: #888;
@@ -2099,83 +2167,78 @@
                 cursor: pointer;
             ">×</button>
             
-            <div style="text-align: center; margin-bottom: 30px;">
-                <div style="font-size: 48px; margin-bottom: 15px;">🎬</div>
-                <h2 style="color: white; margin: 0 0 10px 0; font-size: 24px;">Welcome to MovieShows</h2>
-                <p style="color: #888; margin: 0; font-size: 14px;">Sign in to save your likes, queue, and watch history</p>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">🎬</div>
+                <h2 style="color: white; margin: 0 0 8px 0; font-size: 22px;">Welcome to MovieShows</h2>
+                <p style="color: #888; margin: 0; font-size: 13px;">Sign in to save your likes, queue, and watch history</p>
             </div>
             
-            <div id="login-form-container">
-                <div style="margin-bottom: 20px;">
-                    <input type="email" id="login-email" placeholder="Enter your email" style="
-                        width: 100%;
-                        padding: 15px 20px;
-                        border: 2px solid rgba(255,255,255,0.1);
-                        border-radius: 12px;
-                        background: rgba(255,255,255,0.05);
-                        color: white;
-                        font-size: 16px;
-                        box-sizing: border-box;
-                        outline: none;
-                        transition: border-color 0.2s;
-                    " onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                </div>
-                
-                <button id="email-login-btn" style="
-                    width: 100%;
-                    padding: 15px;
-                    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-                    border: none;
-                    border-radius: 12px;
-                    color: white;
-                    font-size: 16px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    margin-bottom: 15px;
-                    transition: transform 0.2s;
-                ">📧 Continue with Email</button>
-                
-                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0;">
-                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-                    <span style="color: #666; font-size: 12px;">OR</span>
-                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-                </div>
-                
-                <button id="google-login-btn" style="
-                    width: 100%;
-                    padding: 15px;
-                    background: white;
-                    border: none;
-                    border-radius: 12px;
-                    color: #333;
-                    font-size: 16px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    margin-bottom: 15px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 10px;
-                    transition: transform 0.2s;
-                ">
-                    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                    Continue with Google
-                </button>
-                
-                <button id="guest-login-btn" style="
-                    width: 100%;
-                    padding: 15px;
-                    background: rgba(255,255,255,0.1);
-                    border: 1px solid rgba(255,255,255,0.2);
-                    border-radius: 12px;
-                    color: white;
-                    font-size: 16px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                ">Continue as Guest</button>
+            <!-- Google Login -->
+            <button id="google-login-btn" style="
+                width: 100%;
+                padding: 12px;
+                background: white;
+                border: none;
+                border-radius: 10px;
+                color: #333;
+                font-size: 14px;
+                font-weight: bold;
+                cursor: pointer;
+                margin-bottom: 15px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+            ">
+                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                Continue with Google
+            </button>
+            
+            <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <span style="color: #666; font-size: 11px;">or use email</span>
+                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
             </div>
             
-            <p style="color: #666; font-size: 11px; text-align: center; margin-top: 20px;">
+            <!-- Login Form -->
+            <div id="login-form">
+                <input type="text" id="login-email" placeholder="Email or username" style="${inputStyle}">
+                <input type="password" id="login-password" placeholder="Password" style="${inputStyle}">
+                <button id="email-login-btn" style="${btnPrimaryStyle}">Sign In</button>
+                <p style="color: #888; font-size: 12px; text-align: center; margin: 12px 0 0 0;">
+                    New here? <a href="#" id="show-register" style="color: #3b82f6; text-decoration: none;">Create account</a>
+                </p>
+            </div>
+            
+            <!-- Register Form (hidden by default) -->
+            <div id="register-form" style="display: none;">
+                <input type="text" id="register-name" placeholder="Display name" style="${inputStyle}">
+                <input type="email" id="register-email" placeholder="Email" style="${inputStyle}">
+                <input type="password" id="register-password" placeholder="Password (min 6 characters)" style="${inputStyle}">
+                <button id="register-btn" style="${btnPrimaryStyle}">Create Account</button>
+                <p style="color: #888; font-size: 12px; text-align: center; margin: 12px 0 0 0;">
+                    Already have an account? <a href="#" id="show-login" style="color: #3b82f6; text-decoration: none;">Sign in</a>
+                </p>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <span style="color: #666; font-size: 11px;">or</span>
+                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            </div>
+            
+            <button id="guest-login-btn" style="
+                width: 100%;
+                padding: 12px;
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+                cursor: pointer;
+            ">Continue as Guest</button>
+            
+            <p style="color: #555; font-size: 10px; text-align: center; margin-top: 15px;">
                 By continuing, you agree to our Terms of Service and Privacy Policy
             </p>
         `;
@@ -2191,18 +2254,77 @@
         // Close button
         popup.querySelector("#close-login-popup").addEventListener("click", () => overlay.remove());
         
-        // Email login
-        popup.querySelector("#email-login-btn").addEventListener("click", () => {
+        // Toggle between login and register
+        popup.querySelector("#show-register").addEventListener("click", (e) => {
+            e.preventDefault();
+            popup.querySelector("#login-form").style.display = "none";
+            popup.querySelector("#register-form").style.display = "block";
+        });
+        
+        popup.querySelector("#show-login").addEventListener("click", (e) => {
+            e.preventDefault();
+            popup.querySelector("#login-form").style.display = "block";
+            popup.querySelector("#register-form").style.display = "none";
+        });
+        
+        // Email/Password login
+        popup.querySelector("#email-login-btn").addEventListener("click", async () => {
             const email = popup.querySelector("#login-email").value.trim();
-            if (email && email.includes("@")) {
-                loginWithEmail(email);
+            const password = popup.querySelector("#login-password").value;
+            
+            if (!email) {
+                showToast("Please enter email or username", true);
+                return;
+            }
+            if (!password) {
+                showToast("Please enter password", true);
+                return;
+            }
+            
+            const btn = popup.querySelector("#email-login-btn");
+            btn.textContent = "Signing in...";
+            btn.disabled = true;
+            
+            const result = await loginWithEmailPassword(email, password);
+            
+            if (result.success) {
                 overlay.remove();
             } else {
-                showToast("Please enter a valid email", true);
+                btn.textContent = "Sign In";
+                btn.disabled = false;
             }
         });
         
-        // Google login - opens Google OAuth
+        // Register
+        popup.querySelector("#register-btn").addEventListener("click", async () => {
+            const name = popup.querySelector("#register-name").value.trim();
+            const email = popup.querySelector("#register-email").value.trim();
+            const password = popup.querySelector("#register-password").value;
+            
+            if (!email || !email.includes("@")) {
+                showToast("Please enter a valid email", true);
+                return;
+            }
+            if (password.length < 6) {
+                showToast("Password must be at least 6 characters", true);
+                return;
+            }
+            
+            const btn = popup.querySelector("#register-btn");
+            btn.textContent = "Creating account...";
+            btn.disabled = true;
+            
+            const result = await registerUser(email, password, name);
+            
+            if (result.success) {
+                overlay.remove();
+            } else {
+                btn.textContent = "Create Account";
+                btn.disabled = false;
+            }
+        });
+        
+        // Google login
         popup.querySelector("#google-login-btn").addEventListener("click", () => {
             initiateGoogleLogin();
             overlay.remove();
@@ -2214,30 +2336,76 @@
             overlay.remove();
         });
         
-        // Enter key on email input
-        popup.querySelector("#login-email").addEventListener("keypress", (e) => {
-            if (e.key === "Enter") {
-                popup.querySelector("#email-login-btn").click();
-            }
+        // Enter key handlers
+        popup.querySelector("#login-password").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") popup.querySelector("#email-login-btn").click();
+        });
+        popup.querySelector("#register-password").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") popup.querySelector("#register-btn").click();
         });
     }
     
-    function loginWithEmail(email) {
-        const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-        currentUser = {
-            id: "user_" + btoa(email).substring(0, 12),
-            email: email,
-            name: name,
-            loginMethod: "email",
-            createdAt: new Date().toISOString()
-        };
-        localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
-        
-        // Sync existing data to user account
-        syncUserData();
-        
-        if (window.updateLoginButton) window.updateLoginButton();
-        showToast(`Welcome, ${name}! 🎉`);
+    async function loginWithEmailPassword(email, password) {
+        // All authentication handled server-side for security
+        try {
+            const response = await fetch(AUTH_API + '?action=login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.user) {
+                currentUser = result.user;
+                localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
+                syncUserData();
+                if (window.updateLoginButton) window.updateLoginButton();
+                showToast(`Welcome back, ${currentUser.name}! 🎉`);
+                return { success: true };
+            } else {
+                // NO local fallback for security - only allow verified users
+                showToast(result.error || "Invalid credentials", true);
+                return { success: false };
+            }
+        } catch (error) {
+            console.error("[MovieShows] Login error:", error);
+            // NO local fallback - database required for email login
+            showToast("Login service unavailable. Try again later or continue as guest.", true);
+            return { success: false };
+        }
+    }
+    
+    // Local login removed for security - only admin/admin works offline
+    
+    async function registerUser(email, password, displayName) {
+        try {
+            const response = await fetch(AUTH_API + '?action=register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, displayName })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.user) {
+                currentUser = result.user;
+                localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
+                syncUserData();
+                if (window.updateLoginButton) window.updateLoginButton();
+                showToast(`Account created! Welcome, ${currentUser.name}! 🎉`);
+                return { success: true };
+            } else {
+                // NO local fallback for security
+                showToast(result.error || "Registration unavailable. Please try again later.", true);
+                return { success: false };
+            }
+        } catch (error) {
+            console.error("[MovieShows] Registration error:", error);
+            // NO local fallback - database required for registration
+            showToast("Registration service unavailable. Continue as guest for now.", true);
+            return { success: false };
+        }
     }
     
     function continueAsGuest() {
@@ -2445,6 +2613,71 @@
     }
     
     // ========== SHARE FUNCTIONALITY ==========
+    
+    /**
+     * Check URL for ?play= parameter and navigate to that movie
+     */
+    function handlePlayUrlParameter() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const playTitle = urlParams.get('play');
+        
+        if (!playTitle) return;
+        
+        console.log("[MovieShows] URL has play parameter:", playTitle);
+        
+        // Wait for data to load then find and play the movie
+        const checkAndPlay = () => {
+            if (!allMoviesData || allMoviesData.length === 0) {
+                console.log("[MovieShows] Waiting for movies data to load...");
+                setTimeout(checkAndPlay, 500);
+                return;
+            }
+            
+            // Find the movie in the database
+            const movie = allMoviesData.find(m => 
+                m.title.toLowerCase() === playTitle.toLowerCase() ||
+                m.title.toLowerCase().includes(playTitle.toLowerCase())
+            );
+            
+            if (movie) {
+                console.log("[MovieShows] Found movie from URL:", movie.title);
+                
+                // Wait for slides to be populated
+                setTimeout(() => {
+                    // Find the slide with this movie title
+                    const slides = document.querySelectorAll('.snap-center');
+                    let targetIndex = -1;
+                    
+                    slides.forEach((slide, index) => {
+                        const slideTitle = slide.querySelector('h2')?.textContent || slide.getAttribute('data-movie-title');
+                        if (slideTitle && slideTitle.toLowerCase() === movie.title.toLowerCase()) {
+                            targetIndex = index;
+                        }
+                    });
+                    
+                    if (targetIndex >= 0) {
+                        console.log("[MovieShows] Scrolling to movie at index:", targetIndex);
+                        scrollToSlide(targetIndex);
+                        setTimeout(() => playSlideAtIndex(targetIndex), 500);
+                    } else {
+                        // Movie not in current view, try to add it at the top
+                        console.log("[MovieShows] Movie not in current slides, adding to feed");
+                        // For now, show a toast with the movie info
+                        showToast(`Loading: ${movie.title}`);
+                    }
+                }, 1500);
+            } else {
+                console.log("[MovieShows] Movie not found in database:", playTitle);
+                showToast(`Movie not found: ${playTitle}`, true);
+            }
+            
+            // Clean the URL after processing
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+        };
+        
+        checkAndPlay();
+    }
     
     function shareMovie(movie) {
         if (!movie?.title) return;
@@ -4114,6 +4347,9 @@
                 setTimeout(clickQueuePlayButton, 2000);
             }
         }, 2000);
+        
+        // Handle ?play= URL parameter for share links
+        setTimeout(handlePlayUrlParameter, 2500);
 
         initialized = true;
         console.log(

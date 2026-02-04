@@ -4,7 +4,11 @@
   "description": "[[Live Demo](https://github.com/eltonaguiar/MOVIESHOWS2_CURSORNOSCROLLINGBUG/)](https://eltonaguiar.github.io/MOVIESHOWS2_CURSORNOSCROLLINGBUG/)",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:playwright && npm run test:puppeteer",
+    "test:playwright": "npx playwright test --config=tests/playwright.config.js",
+    "test:playwright:ui": "npx playwright test --config=tests/playwright.config.js --ui",
+    "test:puppeteer": "npx jest tests/puppeteer --testTimeout=60000",
+    "test:security": "npx playwright test --config=tests/playwright.config.js tests/playwright/security.spec.js && npx jest tests/puppeteer/security.test.js --testTimeout=60000"
   },
   "repository": {
     "type": "git",
@@ -19,6 +23,15 @@
   },
   "homepage": "https://github.com/eltonaguiar/MOVIESHOWS2_CURSORNOSCROLLINGBUG#readme",
   "devDependencies": {
-    "@playwright/test": "^1.58.1"
+    "@playwright/test": "^1.58.1",
+    "jest": "^30.2.0",
+    "puppeteer": "^24.36.1"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "playwright": "^1.58.1",
+    "playwright-core": "^1.58.1"
   }
 }

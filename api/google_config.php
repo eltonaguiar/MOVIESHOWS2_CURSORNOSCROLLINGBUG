@@ -6,6 +6,8 @@
  */
 
 // Google OAuth Credentials - FILL IN YOUR OWN
-define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
-define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+$envClientId = getenv('GOOGLE_CLIENT_ID');
+$envClientSecret = getenv('GOOGLE_CLIENT_SECRET');
+define('GOOGLE_CLIENT_ID', $envClientId ? $envClientId : '');
+define('GOOGLE_CLIENT_SECRET', $envClientSecret ? $envClientSecret : '');
 define('GOOGLE_REDIRECT_URI', 'https://findtorontoevents.ca/movieshows2/api/google_callback.php');
