@@ -16,7 +16,9 @@
     let filterPanel = null;
     let queuePanel = null;
     let userQueue = JSON.parse(localStorage.getItem("movieshows-queue") || "[]");
+    let watchedHistory = JSON.parse(localStorage.getItem("movieshows-watched") || "[]");
     let queueViewMode = localStorage.getItem("movieshows-queue-view") || "thumbnail"; // "thumbnail" or "text"
+    let queueTabMode = localStorage.getItem("movieshows-queue-tab") || "queue"; // "queue" or "watched"
     
     // ========== MUTE CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
@@ -518,13 +520,108 @@
         return queuePanel;
     }
     
+    // Mark a video as watched
+    function markAsWatched(title, posterUrl, year) {
+        if (!title || title === 'Unknown') return;
+        
+        // Check if already in watched
+        const existingIndex = watchedHistory.findIndex(w => w.title === title);
+        if (existingIndex >= 0) {
+            // Move to front (most recent)
+            watchedHistory.splice(existingIndex, 1);
+        }
+        
+        // Add to front with timestamp
+        watchedHistory.unshift({
+            title,
+            posterUrl: posterUrl || null,
+            year: year || null,
+            watchedAt: new Date().toISOString()
+        });
+        
+        // Keep only last 100 watched items
+        if (watchedHistory.length > 100) {
+            watchedHistory = watchedHistory.slice(0, 100);
+        }
+        
+        localStorage.setItem("movieshows-watched", JSON.stringify(watchedHistory));
+    }
+    
+    // Get alternate trailers for a movie
+    function getAlternateTrailers(title) {
+        if (!title || !window.allMoviesData) return [];
+        
+        const movie = window.allMoviesData.find(m => m.title === title);
+        if (!movie) return [];
+        
+        // Look for alternate trailers in the data
+        const trailers = [];
+        if (movie.trailerUrl) trailers.push({ url: movie.trailerUrl, label: 'Official Trailer' });
+        if (movie.trailer2Url) trailers.push({ url: movie.trailer2Url, label: 'Trailer 2' });
+        if (movie.trailer3Url) trailers.push({ url: movie.trailer3Url, label: 'Trailer 3' });
+        if (movie.teaserUrl) trailers.push({ url: movie.teaserUrl, label: 'Teaser' });
+        if (movie.clipUrl) trailers.push({ url: movie.clipUrl, label: 'Clip' });
+        
+        // Also search for same title with different trailers in database
+        const alternates = window.allMoviesData.filter(m => 
+            m.title === title && m.trailerUrl && m.trailerUrl !== movie.trailerUrl
+        );
+        alternates.forEach((alt, i) => {
+            trailers.push({ url: alt.trailerUrl, label: `Alternate ${i + 1}` });
+        });
+        
+        return trailers;
+    }
+    
     function updateQueuePanel() {
         if (!queuePanel) return;
         const content = queuePanel.querySelector(".panel-content");
         
-        // CRITICAL: Refresh videoSlides and get the ACTUAL visible index
+        // CRITICAL: Get the actual visible video from DOM, not from index calculation
         videoSlides = findVideoSlides();
-        const actualVisibleIndex = getCurrentVisibleIndex();
+        
+        // Better method: Find which slide is actually visible by checking the playing iframe
+        let actualVisibleIndex = 0;
+        let nowPlayingTitle = 'Unknown';
+        let nowPlayingPoster = null;
+        
+        // Method 1: Check which iframe is currently playing
+        const playingIframe = document.querySelector('iframe[src*="youtube"][src*="autoplay=1"]');
+        if (playingIframe) {
+            const parentSlide = playingIframe.closest('.snap-center');
+            if (parentSlide) {
+                const slideIndex = videoSlides.indexOf(parentSlide);
+                if (slideIndex >= 0) {
+                    actualVisibleIndex = slideIndex;
+                    nowPlayingTitle = parentSlide.dataset?.movieTitle || parentSlide.querySelector('h2')?.textContent || 'Unknown';
+                    nowPlayingPoster = parentSlide.querySelector('img')?.src;
+                }
+            }
+        }
+        
+        // Method 2: Fallback to scroll position
+        if (nowPlayingTitle === 'Unknown') {
+            actualVisibleIndex = getCurrentVisibleIndex();
+            if (videoSlides[actualVisibleIndex]) {
+                const slide = videoSlides[actualVisibleIndex];
+                nowPlayingTitle = slide.dataset?.movieTitle || slide.querySelector('h2')?.textContent || 'Unknown';
+                nowPlayingPoster = slide.querySelector('img')?.src;
+            }
+        }
+        
+        // Method 3: Check which slide has the .active class
+        if (nowPlayingTitle === 'Unknown') {
+            const activeSlide = document.querySelector('.snap-center.active, .video-slide.active');
+            if (activeSlide) {
+                const slideIndex = videoSlides.indexOf(activeSlide);
+                if (slideIndex >= 0) {
+                    actualVisibleIndex = slideIndex;
+                    nowPlayingTitle = activeSlide.dataset?.movieTitle || activeSlide.querySelector('h2')?.textContent || 'Unknown';
+                    nowPlayingPoster = activeSlide.querySelector('img')?.src;
+                }
+            }
+        }
+        
         currentIndex = actualVisibleIndex; // Sync currentIndex
         
         // Helper function to get poster URL from allMoviesData
@@ -544,18 +641,6 @@
             const letter = title?.charAt(0)?.toUpperCase() || '?';
             return `https://via.placeholder.com/${width}x${height}/1a1a2e/${color}?text=${encodeURIComponent(letter)}`;
         };
-        
-        // Get the actual visible slide's title and poster from the DOM (what user sees)
-        let nowPlayingTitle = 'Unknown';
-        let nowPlayingPoster = null;
-        if (videoSlides[actualVisibleIndex]) {
-            const visibleSlide = videoSlides[actualVisibleIndex];
-            nowPlayingTitle = visibleSlide.dataset?.movieTitle || 
-                              visibleSlide.querySelector('h2')?.textContent || 
-                              'Unknown';
-            // Try to get poster from DOM first, then from allMoviesData
-            nowPlayingPoster = visibleSlide.querySelector('img')?.src || getPosterFromData(nowPlayingTitle);
-        }
         
         // Build playlist with deduplication
         const seenTitles = new Set();
@@ -584,12 +669,32 @@
         
         const isThumbnailMode = queueViewMode === 'thumbnail';
         
+        // Get alternate trailers for current video
+        const alternateTrailers = getAlternateTrailers(nowPlayingTitle);
+        const isQueueTab = queueTabMode === 'queue';
+        
         // Build the panel HTML
         content.innerHTML = `
+            <!-- Tab Selector: Queue vs Watched -->
+            <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; padding: 4px; margin-bottom: 12px;">
+                <button id="tab-queue" style="
+                    flex: 1; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500;
+                    background: ${isQueueTab ? 'rgba(34, 197, 94, 0.3)' : 'transparent'};
+                    color: ${isQueueTab ? '#22c55e' : '#888'};
+                    transition: all 0.2s;
+                ">📋 Queue</button>
+                <button id="tab-watched" style="
+                    flex: 1; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500;
+                    background: ${!isQueueTab ? 'rgba(147, 51, 234, 0.3)' : 'transparent'};
+                    color: ${!isQueueTab ? '#a855f7' : '#888'};
+                    transition: all 0.2s;
+                ">✅ Watched (${watchedHistory.length})</button>
+            </div>
+            
             <!-- View Mode Toggle + Resync -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <button id="queue-resync-btn" style="
-                    padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
+                    padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 11px;
                     background: rgba(59, 130, 246, 0.2); color: #3b82f6;
                     transition: all 0.2s; display: flex; align-items: center; gap: 4px;
                 " title="Resync queue with current video">🔄 Resync</button>
@@ -615,25 +720,47 @@
                     <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite;"></span>
                     Now Playing
                 </h3>
-                <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3); display: flex; gap: 12px; align-items: center;">
-                    ${isThumbnailMode ? `
-                        <img src="${nowPlayingPoster || getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}" 
-                            style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a2e;" 
-                            onerror="this.src='${getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}'">
-                    ` : ''}
-                    <div style="flex: 1; min-width: 0;">
-                        <h4 style="color: white; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nowPlayingTitle}</h4>
-                        <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${actualVisibleIndex + 1} of ${videoSlides.length}</p>
+                <div id="now-playing-item" style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.3);">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        ${isThumbnailMode ? `
+                            <img src="${nowPlayingPoster || getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}" 
+                                style="width: 50px; height: 75px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a2e;" 
+                                onerror="this.src='${getPlaceholderUrl(nowPlayingTitle, 50, 75, '22c55e')}'">
+                        ` : ''}
+                        <div style="flex: 1; min-width: 0;">
+                            <h4 style="color: white; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nowPlayingTitle}</h4>
+                            <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Video ${actualVisibleIndex + 1} of ${videoSlides.length}</p>
+                        </div>
+                        <button id="mark-watched-btn" style="
+                            padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;
+                            background: rgba(147, 51, 234, 0.2); color: #a855f7;
+                            transition: all 0.2s;
+                        " title="Mark as watched">✅</button>
                     </div>
+                    ${alternateTrailers.length > 1 ? `
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <label style="color: #888; font-size: 11px; display: block; margin-bottom: 6px;">Switch Trailer:</label>
+                            <select id="alternate-trailer-select" style="
+                                width: 100%; padding: 8px 10px; background: rgba(0,0,0,0.3); 
+                                border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+                                color: white; font-size: 12px; cursor: pointer;
+                            ">
+                                ${alternateTrailers.map((t, i) => `
+                                    <option value="${t.url}" ${i === 0 ? 'selected' : ''}>${t.label}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
             
+            ${isQueueTab ? `
+            <!-- QUEUE TAB CONTENT -->
             <!-- Up Next Section -->
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 12px;">Up Next (${Math.max(0, videoSlides.length - actualVisibleIndex - 1)} videos)</h3>
                 <div id="up-next-items" style="display: flex; flex-direction: column; gap: ${isThumbnailMode ? '8px' : '4px'}; max-height: 200px; overflow-y: auto;">
                     ${upNextItems.map((item, i) => {
-                        // Always try to get poster for thumbnail mode
                         const itemPoster = item.posterUrl || getPosterFromData(item.title) || getPlaceholderUrl(item.title, 30, 45, '666');
                         return isThumbnailMode ? `
                         <div class="up-next-item" data-index="${item.index}" style="
@@ -716,6 +843,62 @@
                     </div>
                 `}
             </div>
+            ` : `
+            <!-- WATCHED TAB CONTENT -->
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="color: #a855f7; font-size: 12px; text-transform: uppercase;">Watch History (${watchedHistory.length})</h3>
+                    ${watchedHistory.length > 0 ? '<button id="clear-watched" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 11px;">Clear All</button>' : ''}
+                </div>
+                
+                ${watchedHistory.length === 0 ? `
+                    <div style="text-align: center; padding: 30px 20px; background: rgba(147, 51, 234, 0.05); border-radius: 12px; border: 1px dashed rgba(147, 51, 234, 0.3);">
+                        <p style="color: #666; font-size: 13px; margin: 0;">Videos you watch will appear here</p>
+                        <p style="color: #555; font-size: 11px; margin: 8px 0 0 0;">Click ✅ on any video to mark it as watched</p>
+                    </div>
+                ` : `
+                    <div id="watched-items" style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">
+                        ${watchedHistory.map((item, index) => {
+                            const watchedPoster = item.posterUrl || getPosterFromData(item.title) || getPlaceholderUrl(item.title, 40, 60, 'a855f7');
+                            const watchedDate = item.watchedAt ? new Date(item.watchedAt).toLocaleDateString() : '';
+                            return isThumbnailMode ? `
+                            <div class="watched-item" data-index="${index}" style="
+                                display: flex; gap: 10px; padding: 10px; background: rgba(147, 51, 234, 0.05);
+                                border-radius: 10px; cursor: pointer; transition: all 0.2s;
+                                border: 1px solid rgba(147, 51, 234, 0.2);
+                            " onmouseover="this.style.background='rgba(147, 51, 234, 0.1)'" onmouseout="this.style.background='rgba(147, 51, 234, 0.05)'">
+                                <img src="${watchedPoster}" 
+                                    style="width: 40px; height: 60px; object-fit: cover; border-radius: 6px; background: #1a1a2e;" 
+                                    onerror="this.src='${getPlaceholderUrl(item.title, 40, 60, 'a855f7')}'">
+                                <div style="flex: 1; min-width: 0;">
+                                    <h4 style="color: white; font-size: 13px; margin: 0 0 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h4>
+                                    <p style="color: #888; font-size: 11px; margin: 0;">${item.year || ''} ${watchedDate ? '• Watched ' + watchedDate : ''}</p>
+                                    <div style="margin-top: 6px; display: flex; gap: 6px;">
+                                        <button class="play-watched-item" style="padding: 4px 10px; background: #a855f7; color: white; 
+                                            border: none; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer;">▶ Rewatch</button>
+                                        <button class="remove-watched-item" style="padding: 4px 8px; background: rgba(255,255,255,0.1); 
+                                            color: #aaa; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">✕</button>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="watched-item" data-index="${index}" style="
+                                display: flex; gap: 8px; padding: 8px 10px; background: rgba(147, 51, 234, 0.03);
+                                border-radius: 6px; cursor: pointer; transition: all 0.2s;
+                                border: 1px solid rgba(147, 51, 234, 0.1); align-items: center;
+                            " onmouseover="this.style.background='rgba(147, 51, 234, 0.08)'" onmouseout="this.style.background='rgba(147, 51, 234, 0.03)'">
+                                <span style="color: #a855f7; font-size: 11px;">✓</span>
+                                <span style="color: white; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</span>
+                                <button class="play-watched-item" style="padding: 3px 8px; background: #a855f7; color: white; 
+                                    border: none; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">▶</button>
+                                <button class="remove-watched-item" style="padding: 3px 6px; background: rgba(255,255,255,0.1); 
+                                    color: #aaa; border: none; border-radius: 4px; font-size: 10px; cursor: pointer;">✕</button>
+                            </div>
+                        `; }).join('')}
+                    </div>
+                `}
+            </div>
+            `}
             
             <style>
                 @keyframes pulse {
@@ -732,18 +915,41 @@
             </style>
         `;
         
-        // Add handler for resync button
+        // Add handler for resync button - IMPROVED
         content.querySelector("#queue-resync-btn")?.addEventListener("click", () => {
             console.log('[MovieShows] Manual resync triggered');
-            // Force refresh everything
+            
+            // Force refresh videoSlides
             videoSlides = findVideoSlides();
-            currentIndex = getCurrentVisibleIndex();
+            
+            // Better detection: find which slide is actually visible in viewport
+            let bestIndex = 0;
+            let bestVisibility = 0;
+            
+            videoSlides.forEach((slide, idx) => {
+                const rect = slide.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+                const visibleTop = Math.max(0, rect.top);
+                const visibleBottom = Math.min(viewportHeight, rect.bottom);
+                const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+                const visibility = visibleHeight / rect.height;
+                
+                if (visibility > bestVisibility) {
+                    bestVisibility = visibility;
+                    bestIndex = idx;
+                }
+            });
+            
+            currentIndex = bestIndex;
+            console.log(`[MovieShows] Resync: Found video at index ${bestIndex} with ${Math.round(bestVisibility * 100)}% visibility`);
+            
             // Stop all videos and play only the visible one
             forceStopAllVideos();
             setTimeout(() => {
                 forcePlayVisibleVideos();
                 updateQueuePanel();
-                showToast('Queue resynced!');
+                const title = videoSlides[bestIndex]?.dataset?.movieTitle || videoSlides[bestIndex]?.querySelector('h2')?.textContent || 'Unknown';
+                showToast(`Synced to: ${title}`);
             }, 100);
         });
         
@@ -764,12 +970,68 @@
             }
         });
         
+        // Add handlers for tab switching
+        content.querySelector("#tab-queue")?.addEventListener("click", () => {
+            if (queueTabMode !== 'queue') {
+                queueTabMode = 'queue';
+                localStorage.setItem("movieshows-queue-tab", queueTabMode);
+                updateQueuePanel();
+            }
+        });
+        
+        content.querySelector("#tab-watched")?.addEventListener("click", () => {
+            if (queueTabMode !== 'watched') {
+                queueTabMode = 'watched';
+                localStorage.setItem("movieshows-queue-tab", queueTabMode);
+                updateQueuePanel();
+            }
+        });
+        
+        // Add handler for mark as watched button
+        content.querySelector("#mark-watched-btn")?.addEventListener("click", () => {
+            if (nowPlayingTitle && nowPlayingTitle !== 'Unknown') {
+                const movie = window.allMoviesData?.find(m => m.title === nowPlayingTitle);
+                markAsWatched(nowPlayingTitle, nowPlayingPoster || movie?.posterUrl, movie?.year);
+                showToast(`✅ Marked "${nowPlayingTitle}" as watched`);
+                updateQueuePanel();
+            }
+        });
+        
+        // Add handler for alternate trailer select
+        content.querySelector("#alternate-trailer-select")?.addEventListener("change", (e) => {
+            const newTrailerUrl = e.target.value;
+            if (newTrailerUrl && videoSlides[actualVisibleIndex]) {
+                const iframe = videoSlides[actualVisibleIndex].querySelector('iframe');
+                if (iframe) {
+                    // Extract video ID and construct new URL
+                    let videoId = '';
+                    const match = newTrailerUrl.match(/(?:embed\/|watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                    if (match) videoId = match[1];
+                    else if (newTrailerUrl.length === 11) videoId = newTrailerUrl;
+                    
+                    if (videoId) {
+                        const newSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${isMuted ? 1 : 0}&enablejsapi=1&modestbranding=1&rel=0`;
+                        iframe.src = newSrc;
+                        showToast('Switched to alternate trailer');
+                    }
+                }
+            }
+        });
+        
         // Add handlers for clear queue
         content.querySelector("#clear-queue")?.addEventListener("click", () => {
             userQueue = [];
             saveQueue();
             updateQueuePanel();
             showToast("Queue cleared");
+        });
+        
+        // Add handlers for clear watched
+        content.querySelector("#clear-watched")?.addEventListener("click", () => {
+            watchedHistory = [];
+            localStorage.setItem("movieshows-watched", JSON.stringify(watchedHistory));
+            updateQueuePanel();
+            showToast("Watch history cleared");
         });
         
         // Add handlers for up-next items
@@ -811,6 +1073,35 @@
             
             // Drag and drop for reordering
             setupQueueDragAndDrop(itemsContainer);
+        }
+        
+        // Add handlers for watched items
+        const watchedContainer = content.querySelector("#watched-items");
+        if (watchedContainer) {
+            watchedContainer.querySelectorAll(".play-watched-item").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.closest(".watched-item").dataset.index);
+                    const item = watchedHistory[index];
+                    if (item) {
+                        const movie = allMoviesData.find(m => m.title === item.title) || item;
+                        closePanel(queuePanel);
+                        showToast(`Rewatching: ${movie.title}`);
+                        addMovieToFeed(movie, true, true);
+                    }
+                });
+            });
+            
+            watchedContainer.querySelectorAll(".remove-watched-item").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.closest(".watched-item").dataset.index);
+                    const removed = watchedHistory.splice(index, 1);
+                    localStorage.setItem("movieshows-watched", JSON.stringify(watchedHistory));
+                    updateQueuePanel();
+                    showToast(`Removed "${removed[0]?.title || 'item'}" from history`);
+                });
+            });
         }
     }
     
