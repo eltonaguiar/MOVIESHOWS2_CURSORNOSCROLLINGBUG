@@ -1418,7 +1418,6 @@
         // Find nav buttons directly and add click handlers
         const findAndSetupNavButtons = () => {
             const allButtons = document.querySelectorAll("button");
-            let foundCount = 0;
             
             allButtons.forEach(btn => {
                 const text = getButtonText(btn);
@@ -1426,12 +1425,8 @@
                 // Skip if already handled
                 if (btn.dataset.navHandled) return;
                 
-                // Debug: log all button texts (but only first 50 unique buttons)
-                if (!btn.dataset.navLogged && foundCount < 50) {
-                    console.log(`[MovieShows] Button: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`);
-                    btn.dataset.navLogged = "true";
-                    foundCount++;
-                }
+                // Debug: only log important navigation buttons (reduce console spam)
+                // Removed verbose button logging to clean up console
                 
                 // Check for SVG icons to identify icon-only buttons
                 const hasSvg = btn.querySelector("svg");
@@ -1466,8 +1461,11 @@
                     console.log("[MovieShows] Bound Filters button");
                 }
                 
-                // My Queue (check for "queue" in text OR list icon)
-                if (text.includes("queue") || (svgClass.includes("list") && !text.includes("play"))) {
+                // My Queue (check for "queue" in text - but NOT "next up" buttons)
+                // Exclude "next up" and "up next" buttons which have their own function
+                const isQueueButton = text.includes("queue") || text.includes("my queue");
+                const isNextUpButton = text.includes("next up") || text.includes("up next");
+                if (isQueueButton && !isNextUpButton) {
                     btn.dataset.navHandled = "true";
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -1477,7 +1475,11 @@
                         const panel = createQueuePanel();
                         openPanel(panel);
                     }, true);
-                    console.log("[MovieShows] Bound My Queue button");
+                    // Only log once per unique button
+                    if (!btn.dataset.queueBound) {
+                        btn.dataset.queueBound = "true";
+                        console.log("[MovieShows] Bound My Queue button");
+                    }
                 }
                 
                 // Category: All
@@ -2652,7 +2654,7 @@
             if (!scrollContainer) return;
         }
 
-        console.log(`[MovieShows] Adding movie to feed: ${movie.title} (Scroll: ${scrollAfter}, LoadNow: ${loadImmediately})`);
+        // Verbose logging removed - see summary log in populateInitialVideos
 
         // Check for duplicates in the entire feed (unless forced scroll which means user clicked)
         if (!scrollAfter) {
@@ -3400,13 +3402,12 @@
 
         // Add movies to feed - load first one immediately, others lazy
         initialMovies.forEach((movie, index) => {
-            console.log(`[MovieShows] Adding: ${movie.title} (trailer: ${movie.trailerUrl ? 'YES' : 'NO'})`);
             addMovieToFeed(movie, false, index === 0); // loadImmediately for first one
         });
 
         // Refresh slide list AFTER adding all movies
         videoSlides = findVideoSlides();
-        console.log(`[MovieShows] Added ${initialMovies.length} initial videos`);
+        console.log(`[MovieShows] Added ${initialMovies.length} initial videos: ${initialMovies.slice(0, 3).map(m => m.title).join(', ')}...`);
 
         // Scroll to first slide and FORCE play video
         if (videoSlides.length > 0) {
