@@ -58,17 +58,18 @@ const MovieShowsDB = {
     async testConnection() {
         try {
             const response = await this.fetchAPI('movies.php?action=stats');
-            if (response.success) {
+            if (response && response.success) {
                 this.isConnected = true;
                 console.log('[MovieShows DB] Connected to database');
                 this.showConnectionStatus(true);
                 return true;
             }
         } catch (error) {
-            console.log('[MovieShows DB] Database unavailable, using localStorage');
-            this.isConnected = false;
-            this.showConnectionStatus(false);
+            // Silently handle - using localStorage is fine
         }
+        this.isConnected = false;
+        console.log('[MovieShows DB] Using localStorage (offline mode)');
+        this.showConnectionStatus(false);
         return false;
     },
     
@@ -117,9 +118,17 @@ const MovieShowsDB = {
         
         try {
             const response = await fetch(url, mergedOptions);
-            return await response.json();
+            const text = await response.text();
+            
+            // Check if response is HTML (PHP error) instead of JSON
+            if (text.startsWith('<') || text.startsWith('<!')) {
+                // API returned HTML error - silently fail, app will use localStorage
+                throw new Error('API returned HTML instead of JSON');
+            }
+            
+            return JSON.parse(text);
         } catch (error) {
-            console.error('[MovieShows DB] API error:', error);
+            // Silently handle - localStorage fallback is fine
             throw error;
         }
     },
@@ -142,7 +151,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Failed to get movies:', error);
+            // Silently fail - use fallback
         }
         
         // Fallback to allMoviesData
@@ -161,7 +170,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Search failed:', error);
+            // Silently fail - use local search
         }
         
         // Fallback to local search
@@ -184,7 +193,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Random fetch failed:', error);
+            // Silently fail - use local random
         }
         
         // Fallback to local random
@@ -204,7 +213,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Stats fetch failed:', error);
+            // Silently fail - use local stats
         }
         
         // Fallback stats
@@ -251,7 +260,7 @@ const MovieShowsDB = {
                 return response;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Sync failed:', error);
+            // Add to pending for retry later
             this.addToPendingOps({ type: 'sync-movies', data: formatted });
         }
         
@@ -272,7 +281,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Get queue failed:', error);
+            // Silently fail - use localStorage
         }
         
         // Fallback to localStorage
@@ -326,7 +335,7 @@ const MovieShowsDB = {
             });
             console.log('[MovieShows DB] Queue synced');
         } catch (error) {
-            console.error('[MovieShows DB] Queue sync failed:', error);
+            // Silently fail
         }
     },
     
@@ -339,9 +348,9 @@ const MovieShowsDB = {
                 await this.fetchAPI(`user.php?action=queue-remove&movie_id=${movieId}`, {
                     method: 'DELETE'
                 });
-            } catch (error) {
-                console.error('[MovieShows DB] Remove from queue failed:', error);
-            }
+        } catch (error) {
+            // Silently fail
+        }
         }
     },
     
@@ -365,8 +374,7 @@ const MovieShowsDB = {
             });
             return response;
         } catch (error) {
-            console.error('[MovieShows DB] Create playlist failed:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: 'Offline' };
         }
     },
     
@@ -403,7 +411,7 @@ const MovieShowsDB = {
                 return response.data;
             }
         } catch (error) {
-            console.error('[MovieShows DB] Get preferences failed:', error);
+            // Silently fail - use localStorage
         }
         
         // Fallback to localStorage
@@ -523,7 +531,7 @@ const MovieShowsDB = {
                 }
                 processed.push(op);
             } catch (error) {
-                console.error('[MovieShows DB] Pending op failed:', error);
+                // Will retry next time
             }
         }
         
