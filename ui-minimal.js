@@ -1,114 +1,102 @@
-// UI Minimal - Clean interface that KEEPS essential navigation
-// Keeps: mute, filters, search, queue, category buttons
+// UI Minimal - Clean interface with WORKING navigation
+// Does NOT interfere with search, queue, or filter panels
 
 (function() {
-    console.log('[MovieShows] UI Minimal - Clean mode with navigation...');
+    console.log('[MovieShows] UI Minimal - Navigation-safe mode...');
     
-    // Essential buttons to ALWAYS KEEP visible
-    const ESSENTIAL_BUTTONS = [
-        'click to unmute', 'unmute', 'sound on', 'mute',
-        'all (', 'movies (', 'tv (', 'now playing',
-        'filters', 'search', 'browse', 'queue', 'my queue',
-        'open quick nav', 'close menu', 'close',
-        'search & browse'
+    // IDs/classes to NEVER hide (essential UI panels)
+    const NEVER_HIDE = [
+        'search-panel', 'search-modal', 'search-overlay',
+        'queue-panel', 'queue-modal', 'queue-overlay',
+        'filter-panel', 'filter-modal', 'filters',
+        'quick-nav', 'quicknav', 'nav-panel',
+        'mute-control', 'mute'
     ];
     
-    function isEssentialButton(btn) {
-        const text = (btn.textContent || '').toLowerCase().trim();
-        const id = (btn.id || '').toLowerCase();
+    function shouldNeverHide(element) {
+        const id = (element.id || '').toLowerCase();
+        const className = (element.className || '').toLowerCase();
         
-        // Always keep mute control
-        if (id === 'mute-control' || id.includes('mute')) return true;
+        // Check if element or parent contains essential panel
+        for (const keep of NEVER_HIDE) {
+            if (id.includes(keep) || className.includes(keep)) return true;
+        }
         
-        // Check against essential patterns
-        return ESSENTIAL_BUTTONS.some(essential => text.includes(essential));
+        // Check parent containers too
+        let parent = element.parentElement;
+        let depth = 0;
+        while (parent && depth < 5) {
+            const parentId = (parent.id || '').toLowerCase();
+            const parentClass = (parent.className || '').toLowerCase();
+            for (const keep of NEVER_HIDE) {
+                if (parentId.includes(keep) || parentClass.includes(keep)) return true;
+            }
+            parent = parent.parentElement;
+            depth++;
+        }
+        
+        return false;
     }
     
-    function cleanupUI() {
-        console.log('[MovieShows] Running UI cleanup...');
-        
-        // 1. Hide buttons on non-active slides (reduces clutter)
-        document.querySelectorAll('.video-slide:not(.active), .slide:not(.active)').forEach(slide => {
-            slide.querySelectorAll('button').forEach(btn => {
-                btn.style.display = 'none';
-            });
-        });
-        
-        // 2. Hide action button panels
-        document.querySelectorAll('.action-buttons, .slide-actions, [class*="action-panel"]').forEach(el => {
-            el.style.display = 'none';
-        });
-        
-        // 3. Hide the settings panel on the right
-        document.querySelectorAll('div').forEach(div => {
-            const style = div.getAttribute('style') || '';
-            const text = div.textContent || '';
-            
-            // Hide fixed right panels with settings content
-            if ((style.includes('fixed') && style.includes('right')) ||
-                text.includes('Player:') || text.includes('Txt:') || text.includes('Bar:') ||
-                (text.includes('Autoplay') && text.includes('ON'))) {
-                
-                // But don't hide if it contains essential navigation
-                const hasEssential = ESSENTIAL_BUTTONS.some(e => text.toLowerCase().includes(e));
-                if (!hasEssential) {
-                    div.style.display = 'none';
-                }
-            }
-        });
-        
-        // 4. Hide specific non-essential buttons
+    function cleanupExtraButtons() {
+        // Only hide non-essential action buttons on video slides
         const hideButtonTexts = [
-            'like', 'save', 'open', 'share', 'next up', 'similar', 'broken',
-            'hype', 'thought', 'boring', 'emotional', 'next description',
-            'hide', 'list', 'movie fan', 'shuffle', 'stats', 'badges',
-            'mood', 'coming soon', 'autoplay', 'bar:', 'full', 'title',
-            'high', 'mid', 'def', 'player:', 'txt', 'dt',
-            'accessibility', 'parental', 'trivia', 'export', 'studios',
-            'franchises', 'awards', 'releases', 'party', 'shield', 'favorites',
-            'director', 'actor', 'crew', 'ratings', 'download', 'soundtrack',
-            'reviews', 'quotes', 'gallery', 'runtime', 'year', 'language',
-            'country', 'loop', 'skip', 'discuss', 'notes', 'collections',
-            'binge', 'compare', 'themes', 'milestones', 'goals', 'bookmarks',
-            'pip', 'session', 'celebration', 'calendar', 'tags', 'invites',
-            'insights', 'notifications', 'streaks', 'chapters', 'theater',
-            'subtitles', 'report', 'versions', 'quality', 'sync', 'alerts',
-            'preview', 'speed', 'cast', 'box office', 'trending', 'new',
-            'recently', 'random', 'alternative', 'scene', 'quick share',
-            'timeline', 'dashboard', 'reminders', 'watch party', 'mood board',
-            'playlist manager', 'browse collections', 'compare content', 'smart'
+            'hype', 'thought', 'boring', 'emotional',
+            'movie fan', 'shuffle', 'stats', 'badges',
+            'mood', 'coming soon', 'autoplay', 'bar:',
+            'player:', 'txt', 'dt', 'accessibility', 'parental',
+            'trivia', 'export', 'studios', 'franchises', 'awards',
+            'releases', 'party', 'shield', 'director', 'actor', 'crew',
+            'ratings', 'download', 'soundtrack', 'reviews', 'quotes',
+            'gallery', 'runtime', 'loop', 'skip', 'discuss', 'notes',
+            'collections', 'binge', 'compare', 'themes', 'milestones',
+            'goals', 'bookmarks', 'pip', 'session', 'celebration',
+            'calendar', 'tags', 'invites', 'insights', 'notifications',
+            'streaks', 'chapters', 'theater', 'subtitles', 'report',
+            'versions', 'quality', 'sync', 'alerts', 'preview', 'speed',
+            'cast', 'box office', 'scene', 'quick share', 'timeline',
+            'dashboard', 'reminders', 'watch party', 'mood board',
+            'playlist manager', 'browse collections', 'compare content'
         ];
         
-        document.querySelectorAll('button, [role="button"]').forEach(btn => {
-            // Skip if essential
-            if (isEssentialButton(btn)) return;
+        document.querySelectorAll('.video-slide button, .slide button').forEach(btn => {
+            // Skip if in essential panel
+            if (shouldNeverHide(btn)) return;
             
             const text = (btn.textContent || '').toLowerCase().trim();
             
-            // Hide if matches any non-essential pattern
             for (const hideText of hideButtonTexts) {
-                if (text.includes(hideText) || text === hideText) {
+                if (text.includes(hideText)) {
                     btn.style.display = 'none';
                     break;
                 }
             }
         });
         
-        // 5. Hide genre buttons (action, comedy, drama, etc)
-        const genreNames = ['action', 'comedy', 'drama', 'horror', 'sci-fi', 'romance', 'thriller', 'animation', 'documentary', 'fantasy', 'adventure'];
-        document.querySelectorAll('button').forEach(btn => {
-            const text = (btn.textContent || '').toLowerCase().trim();
-            if (genreNames.includes(text)) {
+        // Hide buttons on non-active slides
+        document.querySelectorAll('.video-slide:not(.active), .slide:not(.active)').forEach(slide => {
+            slide.querySelectorAll('button').forEach(btn => {
                 btn.style.display = 'none';
+            });
+        });
+    }
+    
+    function hideSettingsPanel() {
+        // Only hide the right-side settings panel, not search/queue panels
+        document.querySelectorAll('div').forEach(div => {
+            // Skip essential panels
+            if (shouldNeverHide(div)) return;
+            
+            const style = div.getAttribute('style') || '';
+            const text = (div.textContent || '').substring(0, 200);
+            
+            // Only hide if it's a settings-type panel (has Player:, Txt:, Bar: content)
+            if ((text.includes('Player:') && text.includes('S') && text.includes('M') && text.includes('L')) ||
+                (text.includes('Txt:') && text.includes('Def')) ||
+                (text.includes('Bar:') && text.includes('Show'))) {
+                div.style.display = 'none';
             }
         });
-        
-        // 6. Hide info toggle and action panel toggle
-        const infoToggle = document.getElementById('info-toggle');
-        if (infoToggle) infoToggle.style.display = 'none';
-        
-        const actionToggle = document.getElementById('action-panel-toggle');
-        if (actionToggle) actionToggle.style.display = 'none';
     }
     
     function addMinimalStyles() {
@@ -117,26 +105,23 @@
         const style = document.createElement('style');
         style.id = 'minimal-ui-styles';
         style.textContent = `
-            /* Hide extra panels */
+            /* Hide settings panel and feature panels */
             .settings-panel, #settings-panel,
             .feature-panel, .feature-modal,
             [class*="premium"], [class*="batch"],
-            .quick-actions-popup, .quick-info-tooltip,
-            #main-popup-menu, #main-menu-btn, #sandbox-link-btn,
-            #info-toggle, #action-panel-toggle,
+            #main-popup-menu, #sandbox-link-btn,
             .genre-buttons, .duration-filter, .speed-controls {
                 display: none !important;
             }
             
-            /* Hide buttons on non-active slides */
-            .video-slide:not(.active) button,
-            .slide:not(.active) button {
-                display: none !important;
-            }
-            
-            /* Hide action buttons */
-            .action-buttons, .slide-actions, [class*="action-panel"] {
-                display: none !important;
+            /* KEEP search, queue, and filter panels visible! */
+            #search-panel, .search-panel, [class*="search-modal"],
+            #queue-panel, .queue-panel, [class*="queue-modal"],
+            #filter-panel, .filter-panel, [class*="filter-modal"],
+            .quick-nav, #quick-nav {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
             }
             
             /* Keep mute button visible */
@@ -148,27 +133,15 @@
                 z-index: 10000 !important;
             }
             
-            /* Keep navigation visible - IMPORTANT */
-            .quick-nav button[class*="filter"],
-            .quick-nav button[class*="search"],
-            .quick-nav button[class*="queue"],
-            button[class*="category"] {
-                display: inline-block !important;
-            }
-            
             /* Ensure video fills screen */
             .video-slide, .slide {
                 width: 100vw !important;
                 height: 100vh !important;
-                position: relative !important;
             }
             
             .video-slide iframe, .slide iframe {
                 width: 100% !important;
                 height: 100% !important;
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
             }
         `;
         document.head.appendChild(style);
@@ -196,21 +169,13 @@
     function init() {
         addMinimalStyles();
         
-        // Run cleanup with delays to catch dynamically added elements
-        cleanupUI();
-        setTimeout(cleanupUI, 500);
-        setTimeout(cleanupUI, 1500);
-        setTimeout(cleanupUI, 3000);
+        // Light cleanup - don't break navigation
+        setTimeout(cleanupExtraButtons, 1000);
+        setTimeout(hideSettingsPanel, 1500);
         
         // Ensure video plays
         setTimeout(ensureVideoPlays, 1000);
         setTimeout(ensureVideoPlays, 3000);
-        
-        // Watch for dynamically added elements
-        const observer = new MutationObserver(() => {
-            setTimeout(cleanupUI, 100);
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
         
         console.log('[MovieShows] Minimal UI ready - navigation preserved');
     }
@@ -222,7 +187,6 @@
     }
     
     window.addEventListener('load', () => {
-        setTimeout(cleanupUI, 500);
         setTimeout(ensureVideoPlays, 1000);
     });
 })();

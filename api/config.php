@@ -11,7 +11,7 @@ if (!defined('MOVIESHOWS_API')) {
 }
 
 // Database credentials
-define('DB_HOST', 'localhost');  // Use localhost when running on server
+define('DB_HOST', 'mysql.50webs.com');  // 50webs MySQL server
 define('DB_NAME', 'ejaguiar1_tvmoviestrailers');
 define('DB_USER', 'ejaguiar1_tvmoviestrailers'); // Username = database name on 50webs
 define('DB_PASS', 'virus2016');
