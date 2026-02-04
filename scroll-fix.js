@@ -26,6 +26,14 @@
     let infoHidden = localStorage.getItem("movieshows-info-hidden") === "true";
     let actionPanelHidden = localStorage.getItem("movieshows-action-hidden") === "true";
     
+    // ========== AUTO-SCROLL SETTINGS ==========
+    let autoScrollEnabled = localStorage.getItem("movieshows-auto-scroll") !== "false"; // Default enabled
+    let autoScrollDelay = parseInt(localStorage.getItem("movieshows-auto-scroll-delay") || "10"); // Default 10 seconds
+    let autoScrollTimer = null;
+    let autoScrollCountdown = 0;
+    let autoScrollCountdownInterval = null;
+    let autoScrollPaused = false; // Pause when user interacts
+    
     // ========== USER AUTH & DATA ==========
     let currentUser = JSON.parse(localStorage.getItem("movieshows-user") || "null");
     let likedMovies = JSON.parse(localStorage.getItem("movieshows-likes") || "[]");
@@ -1907,6 +1915,37 @@
               ">
           </div>
       </div>
+      <div id="auto-scroll-section" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="color: #888; font-size: 11px;">⏱️ Auto-scroll:</span>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="auto-scroll-toggle" ${autoScrollEnabled ? 'checked' : ''} style="
+                      width: 36px;
+                      height: 18px;
+                      appearance: none;
+                      background: ${autoScrollEnabled ? '#22c55e' : '#333'};
+                      border-radius: 9px;
+                      position: relative;
+                      cursor: pointer;
+                      transition: background 0.3s;
+                  ">
+                  <span style="color: ${autoScrollEnabled ? '#22c55e' : '#888'}; font-size: 11px; font-weight: bold;">${autoScrollEnabled ? 'ON' : 'OFF'}</span>
+              </label>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #666; font-size: 10px;">Delay:</span>
+              <input type="range" id="auto-scroll-delay-input" min="5" max="60" value="${autoScrollDelay}" style="
+                  flex: 1;
+                  height: 6px;
+                  -webkit-appearance: none;
+                  appearance: none;
+                  background: linear-gradient(to right, #3b82f6 ${((autoScrollDelay - 5) / 55) * 100}%, #333 ${((autoScrollDelay - 5) / 55) * 100}%);
+                  border-radius: 3px;
+                  cursor: pointer;
+              ">
+              <span id="auto-scroll-delay-value" style="color: #3b82f6; font-size: 12px; font-weight: bold; min-width: 28px;">${autoScrollDelay}s</span>
+          </div>
+      </div>
     `;
 
         const container = document.getElementById("player-size-control");
@@ -1993,6 +2032,70 @@
                     volumeMuteBtn.textContent = isMuted ? '🔇' : '🔊';
                 });
             }
+            
+            // Auto-scroll Controls
+            const autoScrollToggle = document.getElementById('auto-scroll-toggle');
+            const autoScrollDelayInput = document.getElementById('auto-scroll-delay-input');
+            const autoScrollDelayValue = document.getElementById('auto-scroll-delay-value');
+            
+            if (autoScrollToggle) {
+                // Style the toggle checkbox
+                const updateToggleStyle = () => {
+                    autoScrollToggle.style.background = autoScrollEnabled ? '#22c55e' : '#333';
+                    const label = autoScrollToggle.nextElementSibling;
+                    if (label) {
+                        label.style.color = autoScrollEnabled ? '#22c55e' : '#888';
+                        label.textContent = autoScrollEnabled ? 'ON' : 'OFF';
+                    }
+                };
+                
+                autoScrollToggle.addEventListener('change', () => {
+                    toggleAutoScroll();
+                    updateToggleStyle();
+                });
+                
+                // Add thumb to toggle
+                const style = document.createElement('style');
+                style.textContent = `
+                    #auto-scroll-toggle::before {
+                        content: '';
+                        position: absolute;
+                        width: 14px;
+                        height: 14px;
+                        border-radius: 50%;
+                        background: white;
+                        top: 2px;
+                        left: ${autoScrollEnabled ? '20px' : '2px'};
+                        transition: left 0.3s;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                    }
+                    #auto-scroll-toggle:checked::before {
+                        left: 20px;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            if (autoScrollDelayInput) {
+                autoScrollDelayInput.addEventListener('input', (e) => {
+                    const newDelay = parseInt(e.target.value);
+                    autoScrollDelay = newDelay;
+                    localStorage.setItem("movieshows-auto-scroll-delay", newDelay.toString());
+                    
+                    if (autoScrollDelayValue) {
+                        autoScrollDelayValue.textContent = `${newDelay}s`;
+                    }
+                    
+                    // Update slider background
+                    const percent = ((newDelay - 5) / 55) * 100;
+                    autoScrollDelayInput.style.background = `linear-gradient(to right, #3b82f6 ${percent}%, #333 ${percent}%)`;
+                });
+                
+                autoScrollDelayInput.addEventListener('change', (e) => {
+                    const newDelay = parseInt(e.target.value);
+                    setAutoScrollDelay(newDelay);
+                });
+            }
         } else {
             document.body.appendChild(control);
         }
@@ -2024,6 +2127,295 @@
         if (volumeMuteBtn) {
             volumeMuteBtn.textContent = isMuted ? '🔇' : '🔊';
         }
+    }
+
+    // ========== AUTO-SCROLL FUNCTIONALITY ==========
+    
+    function startAutoScrollTimer() {
+        if (!autoScrollEnabled) return;
+        
+        // Clear any existing timer
+        stopAutoScrollTimer();
+        
+        autoScrollCountdown = autoScrollDelay;
+        autoScrollPaused = false;
+        
+        // Create/update countdown display
+        createAutoScrollIndicator();
+        updateAutoScrollIndicator();
+        
+        console.log(`[MovieShows] Auto-scroll timer started: ${autoScrollDelay}s`);
+        
+        // Countdown interval (updates every second)
+        autoScrollCountdownInterval = setInterval(() => {
+            if (autoScrollPaused) return;
+            
+            autoScrollCountdown--;
+            updateAutoScrollIndicator();
+            
+            if (autoScrollCountdown <= 0) {
+                // Time's up - scroll to next video
+                stopAutoScrollTimer();
+                scrollToNextVideo();
+            }
+        }, 1000);
+    }
+    
+    function stopAutoScrollTimer() {
+        if (autoScrollTimer) {
+            clearTimeout(autoScrollTimer);
+            autoScrollTimer = null;
+        }
+        if (autoScrollCountdownInterval) {
+            clearInterval(autoScrollCountdownInterval);
+            autoScrollCountdownInterval = null;
+        }
+        autoScrollCountdown = 0;
+        hideAutoScrollIndicator();
+    }
+    
+    function pauseAutoScrollTimer() {
+        autoScrollPaused = true;
+        updateAutoScrollIndicator();
+    }
+    
+    function resumeAutoScrollTimer() {
+        autoScrollPaused = false;
+        updateAutoScrollIndicator();
+    }
+    
+    function resetAutoScrollTimer() {
+        if (autoScrollEnabled) {
+            startAutoScrollTimer();
+        }
+    }
+    
+    function scrollToNextVideo() {
+        if (videoSlides.length === 0) return;
+        
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < videoSlides.length) {
+            console.log(`[MovieShows] Auto-scrolling to video ${nextIndex + 1}`);
+            scrollToSlide(nextIndex);
+            // Timer will restart when new video plays
+        } else {
+            // At the end - try to load more or loop back
+            console.log("[MovieShows] Reached end of videos, loading more...");
+            loadMoreVideos();
+            // Check again after loading
+            setTimeout(() => {
+                if (currentIndex + 1 < videoSlides.length) {
+                    scrollToSlide(currentIndex + 1);
+                }
+            }, 1000);
+        }
+    }
+    
+    function createAutoScrollIndicator() {
+        if (document.getElementById("auto-scroll-indicator")) return;
+        
+        const indicator = document.createElement("div");
+        indicator.id = "auto-scroll-indicator";
+        indicator.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 25px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid rgba(34, 197, 94, 0.6);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        `;
+        
+        indicator.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12,6 12,12 16,14"/>
+                </svg>
+                <span id="auto-scroll-text">Next in <strong id="auto-scroll-countdown">${autoScrollDelay}</strong>s</span>
+            </div>
+            <button id="auto-scroll-skip" style="
+                background: rgba(34, 197, 94, 0.3);
+                border: 1px solid #22c55e;
+                color: #22c55e;
+                padding: 4px 10px;
+                border-radius: 12px;
+                cursor: pointer;
+                font-size: 11px;
+                font-weight: bold;
+                transition: all 0.2s;
+            ">Skip ⏭</button>
+            <button id="auto-scroll-pause" style="
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 4px 10px;
+                border-radius: 12px;
+                cursor: pointer;
+                font-size: 11px;
+                transition: all 0.2s;
+            ">⏸</button>
+        `;
+        
+        document.body.appendChild(indicator);
+        
+        // Skip button - immediately scroll to next
+        const skipBtn = document.getElementById("auto-scroll-skip");
+        if (skipBtn) {
+            skipBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                stopAutoScrollTimer();
+                scrollToNextVideo();
+            });
+            skipBtn.addEventListener("mouseenter", () => {
+                skipBtn.style.background = "rgba(34, 197, 94, 0.5)";
+            });
+            skipBtn.addEventListener("mouseleave", () => {
+                skipBtn.style.background = "rgba(34, 197, 94, 0.3)";
+            });
+        }
+        
+        // Pause/Resume button
+        const pauseBtn = document.getElementById("auto-scroll-pause");
+        if (pauseBtn) {
+            pauseBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (autoScrollPaused) {
+                    resumeAutoScrollTimer();
+                    pauseBtn.textContent = "⏸";
+                    pauseBtn.title = "Pause auto-scroll";
+                } else {
+                    pauseAutoScrollTimer();
+                    pauseBtn.textContent = "▶";
+                    pauseBtn.title = "Resume auto-scroll";
+                }
+            });
+        }
+        
+        // Click on indicator shows settings
+        indicator.addEventListener("click", (e) => {
+            if (e.target === indicator || e.target.id === "auto-scroll-text") {
+                showToast(`Auto-scroll: ${autoScrollDelay}s delay. Change in Settings.`);
+            }
+        });
+    }
+    
+    function updateAutoScrollIndicator() {
+        const countdownEl = document.getElementById("auto-scroll-countdown");
+        const indicator = document.getElementById("auto-scroll-indicator");
+        const pauseBtn = document.getElementById("auto-scroll-pause");
+        
+        if (countdownEl) {
+            countdownEl.textContent = autoScrollCountdown;
+        }
+        
+        if (indicator) {
+            if (autoScrollPaused) {
+                indicator.style.borderColor = "rgba(239, 68, 68, 0.6)";
+                indicator.style.opacity = "0.7";
+            } else {
+                indicator.style.borderColor = "rgba(34, 197, 94, 0.6)";
+                indicator.style.opacity = "1";
+            }
+            
+            // Pulse effect when countdown is low
+            if (autoScrollCountdown <= 3 && !autoScrollPaused) {
+                indicator.style.animation = "pulse-indicator 0.5s infinite";
+            } else {
+                indicator.style.animation = "none";
+            }
+        }
+        
+        if (pauseBtn) {
+            pauseBtn.textContent = autoScrollPaused ? "▶" : "⏸";
+        }
+    }
+    
+    function hideAutoScrollIndicator() {
+        const indicator = document.getElementById("auto-scroll-indicator");
+        if (indicator) {
+            indicator.style.display = "none";
+        }
+    }
+    
+    function showAutoScrollIndicator() {
+        const indicator = document.getElementById("auto-scroll-indicator");
+        if (indicator && autoScrollEnabled) {
+            indicator.style.display = "flex";
+        }
+    }
+    
+    function toggleAutoScroll() {
+        autoScrollEnabled = !autoScrollEnabled;
+        localStorage.setItem("movieshows-auto-scroll", autoScrollEnabled ? "true" : "false");
+        
+        if (autoScrollEnabled) {
+            startAutoScrollTimer();
+            showToast(`Auto-scroll enabled (${autoScrollDelay}s delay)`);
+        } else {
+            stopAutoScrollTimer();
+            showToast("Auto-scroll disabled");
+        }
+        
+        updateAutoScrollSettingsUI();
+    }
+    
+    function setAutoScrollDelay(delay) {
+        autoScrollDelay = Math.max(5, Math.min(60, delay)); // Clamp between 5-60 seconds
+        localStorage.setItem("movieshows-auto-scroll-delay", autoScrollDelay.toString());
+        
+        // Restart timer with new delay if enabled
+        if (autoScrollEnabled && autoScrollCountdownInterval) {
+            startAutoScrollTimer();
+        }
+        
+        updateAutoScrollSettingsUI();
+        showToast(`Auto-scroll delay: ${autoScrollDelay}s`);
+    }
+    
+    function updateAutoScrollSettingsUI() {
+        const toggle = document.getElementById("auto-scroll-toggle");
+        const delayInput = document.getElementById("auto-scroll-delay-input");
+        const delayValue = document.getElementById("auto-scroll-delay-value");
+        
+        if (toggle) {
+            toggle.checked = autoScrollEnabled;
+        }
+        if (delayInput) {
+            delayInput.value = autoScrollDelay;
+        }
+        if (delayValue) {
+            delayValue.textContent = `${autoScrollDelay}s`;
+        }
+    }
+    
+    // Add CSS animation for pulse effect
+    function addAutoScrollStyles() {
+        if (document.getElementById("auto-scroll-styles")) return;
+        
+        const style = document.createElement("style");
+        style.id = "auto-scroll-styles";
+        style.textContent = `
+            @keyframes pulse-indicator {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+            }
+            #auto-scroll-indicator:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 25px rgba(0, 0, 0, 0.6);
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     // ========== USER AUTHENTICATION SYSTEM ==========
@@ -3767,6 +4159,9 @@
 
     function handleWheel(e) {
         const target = e.target;
+        
+        // User is manually scrolling - stop auto-scroll timer (will restart on next video)
+        stopAutoScrollTimer();
 
         if (
             target.closest("#player-size-control") ||
@@ -4013,6 +4408,9 @@
             if (expectedTitle && expectedTitle !== movieTitle) {
                 console.warn(`[MovieShows] SYNC WARNING: Expected "${expectedTitle}" but playing "${movieTitle}"`);
             }
+            
+            // Start auto-scroll timer when video starts playing
+            resetAutoScrollTimer();
         }
     }
     
@@ -4294,6 +4692,7 @@
         createPlayerSizeControl();
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
+        addAutoScrollStyles(); // Add CSS for auto-scroll indicator
         checkGoogleAuthCallback();  // Check for Google OAuth callback
         createLoginButton();  // Add login/profile button
         createInfoToggle();   // Toggle movie info visibility
