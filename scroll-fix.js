@@ -2226,6 +2226,8 @@
     // ========== AUTO-SCROLL FUNCTIONALITY ==========
     // Now triggers at END of video, not arbitrary timer
     
+    let activeYTPlayers = new Map(); // Track YT.Player instances by iframe
+    
     function initYouTubeAPI() {
         if (window.YT && window.YT.Player) {
             ytApiReady = true;
@@ -2248,6 +2250,49 @@
             ytApiReady = true;
             console.log('[MovieShows] YouTube IFrame API ready');
         };
+    }
+    
+    // Create a YT.Player for an iframe to get proper event callbacks
+    function createYTPlayerForIframe(iframe) {
+        if (!window.YT || !window.YT.Player || !iframe) return null;
+        
+        // Don't create duplicate players
+        if (activeYTPlayers.has(iframe)) {
+            return activeYTPlayers.get(iframe);
+        }
+        
+        // iframe needs an ID for YT.Player
+        if (!iframe.id) {
+            iframe.id = 'yt-player-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        try {
+            const player = new YT.Player(iframe.id, {
+                events: {
+                    'onStateChange': function(event) {
+                        console.log(`[MovieShows] YT.Player state change: ${event.data}`);
+                        // State 0 = ended
+                        if (event.data === 0 || event.data === YT.PlayerState.ENDED) {
+                            console.log('[MovieShows] YT.Player: Video ENDED');
+                            onVideoEnded();
+                        }
+                    },
+                    'onReady': function(event) {
+                        console.log('[MovieShows] YT.Player ready');
+                    },
+                    'onError': function(event) {
+                        console.warn('[MovieShows] YT.Player error:', event.data);
+                    }
+                }
+            });
+            
+            activeYTPlayers.set(iframe, player);
+            console.log(`[MovieShows] Created YT.Player for iframe ${iframe.id}`);
+            return player;
+        } catch (e) {
+            console.warn('[MovieShows] Could not create YT.Player:', e.message);
+            return null;
+        }
     }
     
     let lastVideoEndedTime = 0;
@@ -2362,31 +2407,52 @@
         youtubeMessageListenerSetup = true;
         
         window.addEventListener('message', function(event) {
-            // Only handle YouTube messages
-            if (event.origin !== 'https://www.youtube.com') return;
+            // Handle messages from YouTube domain
+            if (!event.origin.includes('youtube.com')) return;
             
             try {
-                const data = JSON.parse(event.data);
+                let data = event.data;
+                
+                // YouTube sometimes sends string, sometimes object
+                if (typeof data === 'string') {
+                    data = JSON.parse(data);
+                }
+                
+                // Debug: Log all YouTube messages to understand the format
+                if (data && (data.event || data.info)) {
+                    console.log('[MovieShows] YouTube message:', JSON.stringify(data).substring(0, 200));
+                }
                 
                 // YouTube sends state changes through postMessage
                 // State 0 = ended, 1 = playing, 2 = paused, 3 = buffering, 5 = cued
                 if (data.event === 'onStateChange') {
                     console.log(`[MovieShows] YouTube state change: ${data.info}`);
                     if (data.info === 0) {
-                        console.log('[MovieShows] YouTube video ended (via onStateChange)');
+                        console.log('[MovieShows] YouTube video ENDED (via onStateChange)');
                         onVideoEnded();
                     }
                 }
                 
-                // Also check for infoDelivery which some embeds use
-                if (data.info && typeof data.info.playerState === 'number') {
-                    if (data.info.playerState === 0) {
-                        console.log('[MovieShows] YouTube video ended (via infoDelivery)');
-                        onVideoEnded();
+                // Check for infoDelivery format (YouTube uses this too)
+                if (data.info && typeof data.info === 'object') {
+                    if (typeof data.info.playerState === 'number') {
+                        console.log(`[MovieShows] YouTube playerState: ${data.info.playerState}`);
+                        if (data.info.playerState === 0) {
+                            console.log('[MovieShows] YouTube video ENDED (via infoDelivery)');
+                            onVideoEnded();
+                        }
+                    }
+                    // Also check currentTime - if video duration reached, it's ended
+                    if (data.info.duration && data.info.currentTime) {
+                        const remaining = data.info.duration - data.info.currentTime;
+                        if (remaining < 0.5 && data.info.duration > 0) {
+                            console.log(`[MovieShows] Video reached end (${data.info.currentTime}/${data.info.duration})`);
+                            onVideoEnded();
+                        }
                     }
                 }
             } catch (e) {
-                // Not a JSON message, ignore
+                // Not a JSON message or parsing error, ignore
             }
         });
         
@@ -4657,6 +4723,12 @@
             currentlyPlayingIframe = iframe;
             currentlyPlayingTitle = movieTitle;
             
+            // CRITICAL: Subscribe to YouTube events via postMessage
+            // Wait for iframe to load, then tell YouTube to send us state changes
+            iframe.onload = function() {
+                subscribeToYouTubeEvents(iframe);
+            };
+            
             // Verify sync if expected title provided
             if (expectedTitle && expectedTitle !== movieTitle) {
                 console.warn(`[MovieShows] SYNC WARNING: Expected "${expectedTitle}" but playing "${movieTitle}"`);
@@ -4664,6 +4736,44 @@
             
             // Start auto-scroll timer when video starts playing
             resetAutoScrollTimer();
+        }
+    }
+    
+    // Subscribe to YouTube iframe events - try YT.Player first, then postMessage fallback
+    function subscribeToYouTubeEvents(iframe) {
+        if (!iframe) return;
+        
+        // Primary method: Use YT.Player API if available
+        if (window.YT && window.YT.Player) {
+            // Small delay to ensure iframe is ready
+            setTimeout(() => {
+                createYTPlayerForIframe(iframe);
+            }, 500);
+        }
+        
+        // Fallback: Also try postMessage approach
+        if (iframe.contentWindow) {
+            try {
+                // Tell YouTube we want to listen for events
+                const listenCommand = JSON.stringify({
+                    event: 'listening',
+                    id: 1,
+                    channel: 'widget'
+                });
+                iframe.contentWindow.postMessage(listenCommand, 'https://www.youtube.com');
+                
+                // Also send command to start receiving state changes
+                const commandMsg = JSON.stringify({
+                    event: 'command',
+                    func: 'addEventListener',
+                    args: ['onStateChange']
+                });
+                iframe.contentWindow.postMessage(commandMsg, 'https://www.youtube.com');
+                
+                console.log(`[MovieShows] Subscribed to YouTube events (postMessage + API)`);
+            } catch (e) {
+                console.warn('[MovieShows] postMessage subscription failed:', e.message);
+            }
         }
     }
     
