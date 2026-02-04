@@ -22,6 +22,41 @@
     function ultraCleanup() {
         console.log('[MovieShows] Running ultra cleanup...');
         
+        // CRITICAL: Hide ALL buttons inside non-active slides
+        document.querySelectorAll('.video-slide:not(.active), .slide:not(.active), div[class*="slide"]:not(.active)').forEach(slide => {
+            slide.querySelectorAll('button').forEach(btn => {
+                btn.style.display = 'none';
+            });
+        });
+        
+        // Hide ALL action buttons everywhere for clean look
+        document.querySelectorAll('.action-buttons, .slide-actions, [class*="action-panel"]').forEach(el => {
+            el.style.display = 'none';
+        });
+        
+        // Hide buttons with these names everywhere
+        const hideButtonNames = ['like', 'save', 'open', 'share', 'next up', 'similar', 'broken', 'hype', 'thought', 'boring', 'emotional', 'next description', 'hide', 'list', 'player:', 'txt', 'dt'];
+        document.querySelectorAll('button').forEach(btn => {
+            const text = (btn.textContent || '').toLowerCase().trim();
+            if (hideButtonNames.some(name => text === name || text.includes(name))) {
+                btn.style.display = 'none';
+            }
+        });
+        
+        // Hide the settings panel on the right side
+        document.querySelectorAll('div').forEach(div => {
+            const style = div.getAttribute('style') || '';
+            if (style.includes('fixed') && style.includes('right') && !div.id?.includes('mute')) {
+                // Check if it's the settings panel
+                const hasPlayerButtons = div.textContent?.toLowerCase().includes('player') || 
+                                         div.textContent?.toLowerCase().includes('hide') ||
+                                         div.textContent?.includes('S') && div.textContent?.includes('M') && div.textContent?.includes('L');
+                if (hasPlayerButtons) {
+                    div.style.display = 'none';
+                }
+            }
+        });
+        
         // Hide ALL buttons in the quick-nav except essentials
         const quickNav = document.querySelector('.quick-nav, #quick-nav, nav');
         if (quickNav) {
@@ -123,7 +158,17 @@
             .genre-buttons,
             .duration-filter,
             .speed-controls,
-            [class*="toolbar"] {
+            [class*="toolbar"],
+            [class*="player-size"],
+            [class*="size-control"],
+            .control-panel,
+            #control-panel,
+            [class*="settings-toggle"] {
+                display: none !important;
+            }
+            
+            /* Hide the right side settings panel */
+            div[style*="position: fixed"][style*="right"] {
                 display: none !important;
             }
             
@@ -134,10 +179,22 @@
                 background: rgba(26, 26, 46, 0.95) !important;
             }
             
-            /* Hide most buttons inside slides */
-            .video-slide .action-buttons,
-            .slide .action-buttons,
-            .slide-actions {
+            /* CRITICAL: Hide ALL buttons on non-active slides */
+            .video-slide:not(.active) button,
+            .video-slide:not(.active) .action-buttons,
+            .video-slide:not(.active) .slide-actions,
+            .slide:not(.active) button,
+            .slide:not(.active) .action-buttons,
+            div[class*="slide"]:not(.active) button {
+                display: none !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+            
+            /* Also hide action buttons even on active slide for cleaner look */
+            .action-buttons,
+            .slide-actions,
+            [class*="action-panel"] {
                 display: none !important;
             }
             
