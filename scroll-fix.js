@@ -28,11 +28,14 @@
     
     // ========== AUTO-SCROLL SETTINGS ==========
     let autoScrollEnabled = localStorage.getItem("movieshows-auto-scroll") !== "false"; // Default enabled
-    let autoScrollDelay = parseInt(localStorage.getItem("movieshows-auto-scroll-delay") || "10"); // Default 10 seconds
+    let autoScrollDelay = parseInt(localStorage.getItem("movieshows-auto-scroll-delay") || "3"); // Delay AFTER video ends (default 3s)
     let autoScrollTimer = null;
     let autoScrollCountdown = 0;
     let autoScrollCountdownInterval = null;
     let autoScrollPaused = false; // Pause when user interacts
+    let ytApiReady = false;
+    let activeYTPlayer = null;
+    let videoEndedWaitingForScroll = false;
     
     // ========== USER AUTH & DATA ==========
     let currentUser = JSON.parse(localStorage.getItem("movieshows-user") || "null");
@@ -2008,7 +2011,7 @@
       </div>
       <div id="auto-scroll-section" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
           <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="color: #888; font-size: 11px;">⏱️ Auto-scroll:</span>
+              <span style="color: #888; font-size: 11px;">⏩ Auto-next (at video end):</span>
               <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="checkbox" id="auto-scroll-toggle" ${autoScrollEnabled ? 'checked' : ''} style="
                       width: 36px;
@@ -2024,13 +2027,13 @@
               </label>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="color: #666; font-size: 10px;">Delay:</span>
-              <input type="range" id="auto-scroll-delay-input" min="5" max="60" value="${autoScrollDelay}" style="
+              <span style="color: #666; font-size: 10px;">Wait after end:</span>
+              <input type="range" id="auto-scroll-delay-input" min="1" max="15" value="${autoScrollDelay}" style="
                   flex: 1;
                   height: 6px;
                   -webkit-appearance: none;
                   appearance: none;
-                  background: linear-gradient(to right, #3b82f6 ${((autoScrollDelay - 5) / 55) * 100}%, #333 ${((autoScrollDelay - 5) / 55) * 100}%);
+                  background: linear-gradient(to right, #3b82f6 ${((autoScrollDelay - 1) / 14) * 100}%, #333 ${((autoScrollDelay - 1) / 14) * 100}%);
                   border-radius: 3px;
                   cursor: pointer;
               ">
@@ -2178,7 +2181,7 @@
                     }
                     
                     // Update slider background
-                    const percent = ((newDelay - 5) / 55) * 100;
+                    const percent = ((newDelay - 1) / 14) * 100;
                     autoScrollDelayInput.style.background = `linear-gradient(to right, #3b82f6 ${percent}%, #333 ${percent}%)`;
                 });
                 
@@ -2221,11 +2224,48 @@
     }
 
     // ========== AUTO-SCROLL FUNCTIONALITY ==========
+    // Now triggers at END of video, not arbitrary timer
     
-    function startAutoScrollTimer() {
+    function initYouTubeAPI() {
+        if (window.YT && window.YT.Player) {
+            ytApiReady = true;
+            console.log('[MovieShows] YouTube API already loaded');
+            return;
+        }
+        
+        // Load YouTube IFrame API
+        if (!document.getElementById('youtube-api-script')) {
+            const tag = document.createElement('script');
+            tag.id = 'youtube-api-script';
+            tag.src = 'https://www.youtube.com/iframe_api';
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            console.log('[MovieShows] Loading YouTube IFrame API...');
+        }
+        
+        // YouTube API will call this when ready
+        window.onYouTubeIframeAPIReady = function() {
+            ytApiReady = true;
+            console.log('[MovieShows] YouTube IFrame API ready');
+        };
+    }
+    
+    function onVideoEnded() {
+        if (!autoScrollEnabled || autoScrollPaused) {
+            console.log('[MovieShows] Video ended but auto-scroll disabled or paused');
+            return;
+        }
+        
+        console.log(`[MovieShows] Video ended! Starting ${autoScrollDelay}s countdown to next video...`);
+        videoEndedWaitingForScroll = true;
+        
+        // Show countdown indicator
+        startPostVideoCountdown();
+    }
+    
+    function startPostVideoCountdown() {
         if (!autoScrollEnabled) return;
         
-        // Clear any existing timer
         stopAutoScrollTimer();
         
         autoScrollCountdown = autoScrollDelay;
@@ -2235,9 +2275,8 @@
         createAutoScrollIndicator();
         updateAutoScrollIndicator();
         
-        console.log(`[MovieShows] Auto-scroll timer started: ${autoScrollDelay}s`);
+        console.log(`[MovieShows] Post-video countdown: ${autoScrollDelay}s until next video`);
         
-        // Countdown interval (updates every second)
         autoScrollCountdownInterval = setInterval(() => {
             if (autoScrollPaused) return;
             
@@ -2245,11 +2284,22 @@
             updateAutoScrollIndicator();
             
             if (autoScrollCountdown <= 0) {
-                // Time's up - scroll to next video
                 stopAutoScrollTimer();
+                videoEndedWaitingForScroll = false;
                 scrollToNextVideo();
             }
         }, 1000);
+    }
+    
+    function startAutoScrollTimer() {
+        // This is now just for showing status - actual scroll triggers on video end
+        if (!autoScrollEnabled) return;
+        
+        // Hide the countdown indicator while video is playing
+        hideAutoScrollIndicator();
+        videoEndedWaitingForScroll = false;
+        
+        console.log(`[MovieShows] Auto-scroll ready: will advance when video ends`);
     }
     
     function stopAutoScrollTimer() {
@@ -2262,6 +2312,7 @@
             autoScrollCountdownInterval = null;
         }
         autoScrollCountdown = 0;
+        videoEndedWaitingForScroll = false;
         hideAutoScrollIndicator();
     }
     
@@ -2276,9 +2327,39 @@
     }
     
     function resetAutoScrollTimer() {
+        // Just reset the status - video end will trigger actual scroll
         if (autoScrollEnabled) {
             startAutoScrollTimer();
         }
+    }
+    
+    // Listen for YouTube iframe messages (for video end detection)
+    function setupYouTubeMessageListener() {
+        window.addEventListener('message', function(event) {
+            // Only handle YouTube messages
+            if (event.origin !== 'https://www.youtube.com') return;
+            
+            try {
+                const data = JSON.parse(event.data);
+                
+                // YouTube sends state changes through postMessage
+                // State 0 = ended, 1 = playing, 2 = paused
+                if (data.event === 'onStateChange' && data.info === 0) {
+                    console.log('[MovieShows] YouTube video ended (via postMessage)');
+                    onVideoEnded();
+                }
+                
+                // Also check for infoDelivery which some embeds use
+                if (data.info && data.info.playerState === 0) {
+                    console.log('[MovieShows] YouTube video ended (via infoDelivery)');
+                    onVideoEnded();
+                }
+            } catch (e) {
+                // Not a JSON message, ignore
+            }
+        });
+        
+        console.log('[MovieShows] YouTube message listener set up');
     }
     
     function scrollToNextVideo() {
@@ -2333,7 +2414,7 @@
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12,6 12,12 16,14"/>
                 </svg>
-                <span id="auto-scroll-text">Next in <strong id="auto-scroll-countdown">${autoScrollDelay}</strong>s</span>
+                <span id="auto-scroll-text">Video ended! Next in <strong id="auto-scroll-countdown">${autoScrollDelay}</strong>s</span>
             </div>
             <button id="auto-scroll-skip" style="
                 background: rgba(34, 197, 94, 0.3);
@@ -2452,17 +2533,17 @@
         
         if (autoScrollEnabled) {
             startAutoScrollTimer();
-            showToast(`Auto-scroll enabled (${autoScrollDelay}s delay)`);
+            showToast(`Auto-next enabled (advances ${autoScrollDelay}s after video ends)`);
         } else {
             stopAutoScrollTimer();
-            showToast("Auto-scroll disabled");
+            showToast("Auto-next disabled");
         }
         
         updateAutoScrollSettingsUI();
     }
     
     function setAutoScrollDelay(delay) {
-        autoScrollDelay = Math.max(5, Math.min(60, delay)); // Clamp between 5-60 seconds
+        autoScrollDelay = Math.max(1, Math.min(15, delay)); // Clamp between 1-15 seconds (wait after video ends)
         localStorage.setItem("movieshows-auto-scroll-delay", autoScrollDelay.toString());
         
         // Restart timer with new delay if enabled
@@ -2471,7 +2552,7 @@
         }
         
         updateAutoScrollSettingsUI();
-        showToast(`Auto-scroll delay: ${autoScrollDelay}s`);
+        showToast(`Wait after video ends: ${autoScrollDelay}s`);
     }
     
     function updateAutoScrollSettingsUI() {
@@ -4833,6 +4914,8 @@
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
         addAutoScrollStyles(); // Add CSS for auto-scroll indicator
+        setupYouTubeMessageListener(); // Listen for video end events
+        initYouTubeAPI(); // Load YouTube IFrame API for better control
         checkGoogleAuthCallback();  // Check for Google OAuth callback
         createLoginButton();  // Add login/profile button
         createInfoToggle();   // Toggle movie info visibility
