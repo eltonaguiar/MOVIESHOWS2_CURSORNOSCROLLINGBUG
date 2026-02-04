@@ -26,6 +26,11 @@
     let infoHidden = localStorage.getItem("movieshows-info-hidden") === "true";
     let actionPanelHidden = localStorage.getItem("movieshows-action-hidden") === "true";
     
+    // ========== USER AUTH & DATA ==========
+    let currentUser = JSON.parse(localStorage.getItem("movieshows-user") || "null");
+    let likedMovies = JSON.parse(localStorage.getItem("movieshows-likes") || "[]");
+    let watchHistory = JSON.parse(localStorage.getItem("movieshows-watch-history") || "[]");
+    
     // ========== API KEYS ==========
     // YouTube API Key (for future enhanced features)
     const YOUTUBE_API_KEY = "AIzaSyBjZruHqjPi2I5XEkpfoNMO5LY-8pzbvgs";
@@ -1555,10 +1560,50 @@
                         e.stopPropagation();
                         const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
                         if (slide) {
-                            const title = slide.querySelector("h2")?.textContent;
+                            const title = slide.querySelector("h2")?.textContent || slide.getAttribute("data-movie-title");
                             if (title) {
                                 const movie = allMoviesData.find(m => m.title === title);
                                 if (movie) addToQueue(movie);
+                            }
+                        }
+                    }, true);
+                }
+                
+                // Like button
+                if (text === "like") {
+                    btn.dataset.navHandled = "true";
+                    btn.dataset.action = "like";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
+                        if (slide) {
+                            const title = slide.querySelector("h2")?.textContent || slide.getAttribute("data-movie-title");
+                            if (title) {
+                                const movie = allMoviesData.find(m => m.title === title);
+                                if (movie) {
+                                    toggleLike(movie);
+                                    // Update this button's appearance
+                                    const liked = isLiked(movie.title);
+                                    btn.innerHTML = liked ? '❤️<br><span style="font-size:10px">Liked</span>' : '🤍<br><span style="font-size:10px">Like</span>';
+                                }
+                            }
+                        }
+                    }, true);
+                }
+                
+                // Share button
+                if (text === "share") {
+                    btn.dataset.navHandled = "true";
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const slide = btn.closest(".snap-center") || videoSlides[currentIndex];
+                        if (slide) {
+                            const title = slide.querySelector("h2")?.textContent || slide.getAttribute("data-movie-title");
+                            if (title) {
+                                const movie = allMoviesData.find(m => m.title === title);
+                                if (movie) shareMovie(movie);
                             }
                         }
                     }, true);
@@ -1946,6 +1991,460 @@
         if (volumeMuteBtn) {
             volumeMuteBtn.textContent = isMuted ? '🔇' : '🔊';
         }
+    }
+
+    // ========== USER AUTHENTICATION SYSTEM ==========
+    
+    function createLoginButton() {
+        if (document.getElementById("user-login-btn")) return;
+        
+        const btn = document.createElement("button");
+        btn.id = "user-login-btn";
+        
+        const updateButtonDisplay = () => {
+            if (currentUser) {
+                btn.innerHTML = `<span style="font-size: 18px;">👤</span> ${currentUser.name?.split(' ')[0] || 'User'}`;
+                btn.style.background = "rgba(34, 197, 94, 0.9)";
+            } else {
+                btn.innerHTML = `<span style="font-size: 18px;">👤</span> Sign In`;
+                btn.style.background = "rgba(59, 130, 246, 0.9)";
+            }
+        };
+        
+        btn.style.cssText = `
+            position: fixed;
+            top: 15px;
+            right: 120px;
+            z-index: 10001;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+        
+        updateButtonDisplay();
+        
+        btn.addEventListener("mouseenter", () => {
+            btn.style.transform = "scale(1.05)";
+        });
+        btn.addEventListener("mouseleave", () => {
+            btn.style.transform = "scale(1)";
+        });
+        
+        btn.addEventListener("click", () => {
+            if (currentUser) {
+                showUserProfilePanel();
+            } else {
+                showLoginPopup();
+            }
+        });
+        
+        document.body.appendChild(btn);
+        
+        // Store reference for updates
+        window.updateLoginButton = updateButtonDisplay;
+    }
+    
+    function showLoginPopup() {
+        // Remove existing popup
+        const existing = document.getElementById("login-popup-overlay");
+        if (existing) existing.remove();
+        
+        const overlay = document.createElement("div");
+        overlay.id = "login-popup-overlay";
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        `;
+        
+        const popup = document.createElement("div");
+        popup.style.cssText = `
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 24px;
+            padding: 40px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+        `;
+        
+        popup.innerHTML = `
+            <button id="close-login-popup" style="
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 24px;
+                cursor: pointer;
+            ">×</button>
+            
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">🎬</div>
+                <h2 style="color: white; margin: 0 0 10px 0; font-size: 24px;">Welcome to MovieShows</h2>
+                <p style="color: #888; margin: 0; font-size: 14px;">Sign in to save your likes, queue, and watch history</p>
+            </div>
+            
+            <div id="login-form-container">
+                <div style="margin-bottom: 20px;">
+                    <input type="email" id="login-email" placeholder="Enter your email" style="
+                        width: 100%;
+                        padding: 15px 20px;
+                        border: 2px solid rgba(255,255,255,0.1);
+                        border-radius: 12px;
+                        background: rgba(255,255,255,0.05);
+                        color: white;
+                        font-size: 16px;
+                        box-sizing: border-box;
+                        outline: none;
+                        transition: border-color 0.2s;
+                    " onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                </div>
+                
+                <button id="email-login-btn" style="
+                    width: 100%;
+                    padding: 15px;
+                    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+                    border: none;
+                    border-radius: 12px;
+                    color: white;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    margin-bottom: 15px;
+                    transition: transform 0.2s;
+                ">📧 Continue with Email</button>
+                
+                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0;">
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                    <span style="color: #666; font-size: 12px;">OR</span>
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                </div>
+                
+                <button id="google-login-btn" style="
+                    width: 100%;
+                    padding: 15px;
+                    background: white;
+                    border: none;
+                    border-radius: 12px;
+                    color: #333;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    margin-bottom: 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    transition: transform 0.2s;
+                ">
+                    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                    Continue with Google
+                </button>
+                
+                <button id="guest-login-btn" style="
+                    width: 100%;
+                    padding: 15px;
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    border-radius: 12px;
+                    color: white;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                ">Continue as Guest</button>
+            </div>
+            
+            <p style="color: #666; font-size: 11px; text-align: center; margin-top: 20px;">
+                By continuing, you agree to our Terms of Service and Privacy Policy
+            </p>
+        `;
+        
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+        
+        // Close on overlay click
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+        
+        // Close button
+        popup.querySelector("#close-login-popup").addEventListener("click", () => overlay.remove());
+        
+        // Email login
+        popup.querySelector("#email-login-btn").addEventListener("click", () => {
+            const email = popup.querySelector("#login-email").value.trim();
+            if (email && email.includes("@")) {
+                loginWithEmail(email);
+                overlay.remove();
+            } else {
+                showToast("Please enter a valid email", true);
+            }
+        });
+        
+        // Google login (simulated for now)
+        popup.querySelector("#google-login-btn").addEventListener("click", () => {
+            showToast("Google login coming soon! Use email for now.", true);
+        });
+        
+        // Guest login
+        popup.querySelector("#guest-login-btn").addEventListener("click", () => {
+            continueAsGuest();
+            overlay.remove();
+        });
+        
+        // Enter key on email input
+        popup.querySelector("#login-email").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                popup.querySelector("#email-login-btn").click();
+            }
+        });
+    }
+    
+    function loginWithEmail(email) {
+        const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+        currentUser = {
+            id: "user_" + btoa(email).substring(0, 12),
+            email: email,
+            name: name,
+            loginMethod: "email",
+            createdAt: new Date().toISOString()
+        };
+        localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
+        
+        // Sync existing data to user account
+        syncUserData();
+        
+        if (window.updateLoginButton) window.updateLoginButton();
+        showToast(`Welcome, ${name}! 🎉`);
+    }
+    
+    function continueAsGuest() {
+        const guestId = "guest_" + Math.random().toString(36).substring(2, 10);
+        currentUser = {
+            id: guestId,
+            name: "Guest",
+            loginMethod: "guest",
+            createdAt: new Date().toISOString()
+        };
+        localStorage.setItem("movieshows-user", JSON.stringify(currentUser));
+        
+        if (window.updateLoginButton) window.updateLoginButton();
+        showToast("Continuing as guest - your data is saved locally");
+    }
+    
+    function showUserProfilePanel() {
+        const existing = document.getElementById("user-profile-panel");
+        if (existing) { existing.remove(); return; }
+        
+        const panel = document.createElement("div");
+        panel.id = "user-profile-panel";
+        panel.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 120px;
+            z-index: 20000;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+            padding: 20px;
+            width: 280px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+        `;
+        
+        panel.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #3b82f6, #6366f1); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                    ${currentUser?.name?.charAt(0)?.toUpperCase() || '👤'}
+                </div>
+                <div>
+                    <div style="color: white; font-weight: bold; font-size: 16px;">${currentUser?.name || 'User'}</div>
+                    <div style="color: #888; font-size: 12px;">${currentUser?.email || currentUser?.loginMethod || 'Guest'}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-around; text-align: center;">
+                    <div>
+                        <div style="color: #3b82f6; font-size: 24px; font-weight: bold;">${likedMovies.length}</div>
+                        <div style="color: #888; font-size: 11px;">Likes</div>
+                    </div>
+                    <div>
+                        <div style="color: #22c55e; font-size: 24px; font-weight: bold;">${userQueue.length}</div>
+                        <div style="color: #888; font-size: 11px;">Queue</div>
+                    </div>
+                    <div>
+                        <div style="color: #f59e0b; font-size: 24px; font-weight: bold;">${watchedHistory.length}</div>
+                        <div style="color: #888; font-size: 11px;">Watched</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="logout-btn" style="
+                width: 100%;
+                padding: 12px;
+                background: rgba(239, 68, 68, 0.2);
+                border: 1px solid rgba(239, 68, 68, 0.3);
+                border-radius: 10px;
+                color: #ef4444;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.2s;
+            ">Sign Out</button>
+        `;
+        
+        document.body.appendChild(panel);
+        
+        // Close when clicking outside
+        const closePanel = (e) => {
+            if (!panel.contains(e.target) && e.target.id !== "user-login-btn") {
+                panel.remove();
+                document.removeEventListener("click", closePanel);
+            }
+        };
+        setTimeout(() => document.addEventListener("click", closePanel), 100);
+        
+        // Logout
+        panel.querySelector("#logout-btn").addEventListener("click", () => {
+            currentUser = null;
+            localStorage.removeItem("movieshows-user");
+            if (window.updateLoginButton) window.updateLoginButton();
+            panel.remove();
+            showToast("Signed out successfully");
+        });
+    }
+    
+    function syncUserData() {
+        // Sync likes, queue, watch history to database if connected
+        if (window.MovieShowsDB?.isConnected) {
+            console.log("[MovieShows] Syncing user data to database...");
+            // Future: implement full sync
+        }
+    }
+    
+    // ========== LIKE FUNCTIONALITY ==========
+    
+    function toggleLike(movie) {
+        if (!movie?.title) return;
+        
+        const index = likedMovies.findIndex(m => m.title === movie.title);
+        if (index >= 0) {
+            likedMovies.splice(index, 1);
+            showToast(`Removed from likes`);
+        } else {
+            likedMovies.push({
+                title: movie.title,
+                type: movie.type,
+                posterUrl: movie.posterUrl || movie.image,
+                likedAt: new Date().toISOString()
+            });
+            showToast(`❤️ Added to likes!`);
+        }
+        
+        localStorage.setItem("movieshows-likes", JSON.stringify(likedMovies));
+        updateLikeButtonStates();
+    }
+    
+    function isLiked(title) {
+        return likedMovies.some(m => m.title === title);
+    }
+    
+    function updateLikeButtonStates() {
+        // Update all visible like buttons based on current likes
+        document.querySelectorAll('.snap-center[data-movie-title]').forEach(slide => {
+            const title = slide.getAttribute('data-movie-title');
+            const likeBtn = slide.querySelector('button[data-action="like"]');
+            if (likeBtn && title) {
+                const liked = isLiked(title);
+                likeBtn.innerHTML = liked ? '❤️' : '🤍';
+                likeBtn.style.color = liked ? '#ef4444' : 'white';
+            }
+        });
+    }
+    
+    // ========== SHARE FUNCTIONALITY ==========
+    
+    function shareMovie(movie) {
+        if (!movie?.title) return;
+        
+        const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(movie.title)}`;
+        const shareText = `Check out "${movie.title}" on MovieShows! 🎬`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: movie.title,
+                text: shareText,
+                url: shareUrl
+            }).catch(err => {
+                if (err.name !== 'AbortError') {
+                    copyToClipboard(shareUrl);
+                }
+            });
+        } else {
+            copyToClipboard(shareUrl);
+        }
+    }
+    
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast("📋 Link copied to clipboard!");
+        }).catch(() => {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast("📋 Link copied to clipboard!");
+        });
+    }
+    
+    // ========== ADD TO WATCH HISTORY ==========
+    
+    function addToWatchHistory(movie) {
+        if (!movie?.title) return;
+        
+        // Remove if already exists (to move to front)
+        const index = watchHistory.findIndex(m => m.title === movie.title);
+        if (index >= 0) {
+            watchHistory.splice(index, 1);
+        }
+        
+        // Add to front
+        watchHistory.unshift({
+            title: movie.title,
+            type: movie.type,
+            posterUrl: movie.posterUrl || movie.image,
+            watchedAt: new Date().toISOString()
+        });
+        
+        // Keep only last 100
+        if (watchHistory.length > 100) {
+            watchHistory = watchHistory.slice(0, 100);
+        }
+        
+        localStorage.setItem("movieshows-watch-history", JSON.stringify(watchHistory));
     }
 
     function setTextLayout(layout) {
@@ -3500,6 +3999,7 @@
         createPlayerSizeControl();
         createLayoutControl();
         createMuteControl();  // Add persistent mute/unmute button
+        createLoginButton();  // Add login/profile button
         createInfoToggle();   // Toggle movie info visibility
         createActionPanelToggle(); // Toggle right action panel
         setupCarouselInteractions();
