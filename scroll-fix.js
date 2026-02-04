@@ -3524,14 +3524,26 @@
       [class*="fixed"][class*="top-4"][class*="left-4"] {
           z-index: 99999 !important;
           pointer-events: auto !important;
+          position: relative !important;
       }
       
-      /* CRITICAL: Make the top navigation bar area always clickable */
-      /* This ensures hamburger menu and other top-left buttons receive clicks */
+      /* CRITICAL: Create a click-through zone at the top of the page */
+      /* All overlays in the top 100px should not intercept clicks */
       .snap-center .absolute.inset-0,
       .snap-center > .absolute.inset-0,
-      div[class*="absolute"][class*="inset-0"] {
-          pointer-events: none;
+      div[class*="absolute"][class*="inset-0"]:not(iframe):not([class*="bottom"]) {
+          pointer-events: none !important;
+      }
+      
+      /* Top navigation bar - ensure nothing blocks it */
+      body > div > div.fixed.top-4,
+      body > div > button.fixed.top-4,
+      div.fixed.top-0,
+      nav.fixed.top-0,
+      header.fixed.top-0,
+      .fixed[class*="top-4"][class*="left-4"] {
+          z-index: 99999 !important;
+          pointer-events: auto !important;
       }
       
       /* But allow clicks on the iframe itself and bottom UI elements */
@@ -3539,7 +3551,8 @@
       .snap-center .absolute.bottom-4,
       .snap-center .absolute.right-4,
       .snap-center [class*="bottom-4"],
-      .snap-center [class*="right-4"] {
+      .snap-center [class*="right-4"],
+      iframe.lazy-iframe {
           pointer-events: auto !important;
       }
       
@@ -4859,11 +4872,48 @@
         
         // Add tooltips to all buttons for better UX
         setTimeout(addTooltipsToAllButtons, 3000);
+        
+        // Fix hamburger menu button click issues
+        setTimeout(fixHamburgerButton, 1000);
 
         initialized = true;
         console.log(
             "[MovieShows] Ready! Scroll: wheel/arrows/J/K | Size: 1/2/3/4 keys",
         );
+    }
+    
+    // Fix hamburger button to ensure it's always clickable
+    function fixHamburgerButton() {
+        console.log('[MovieShows] Fixing hamburger button clickability...');
+        
+        // Find the hamburger button
+        const hamburger = document.querySelector('button[aria-label="Open Quick Nav"]') 
+            || document.querySelector('button[title="Quick Navigation"]')
+            || document.querySelector('.fixed.top-4.left-4 button');
+        
+        if (hamburger) {
+            // Ensure it has the highest z-index
+            hamburger.style.zIndex = '999999';
+            hamburger.style.pointerEvents = 'auto';
+            hamburger.style.position = 'relative';
+            
+            // Make parent containers also clickable
+            let parent = hamburger.parentElement;
+            let depth = 0;
+            while (parent && depth < 5) {
+                if (parent.classList?.contains('fixed') || getComputedStyle(parent).position === 'fixed') {
+                    parent.style.zIndex = '999998';
+                    parent.style.pointerEvents = 'auto';
+                }
+                parent = parent.parentElement;
+                depth++;
+            }
+            
+            console.log('[MovieShows] Hamburger button fixed');
+        } else {
+            // Retry if not found yet (React might not have rendered)
+            setTimeout(fixHamburgerButton, 1000);
+        }
     }
     
     // Add tooltips to all buttons for user guidance
