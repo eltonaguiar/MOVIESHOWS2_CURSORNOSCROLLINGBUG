@@ -4902,38 +4902,256 @@
         );
     }
     
-    // Fix hamburger button to ensure it's always clickable
+    // Create hamburger menu button and navigation panel (since Next.js doesn't render one)
     function fixHamburgerButton() {
-        console.log('[MovieShows] Fixing hamburger button clickability...');
+        console.log('[MovieShows] Creating hamburger menu...');
         
-        // Find the hamburger button
-        const hamburger = document.querySelector('button[aria-label="Open Quick Nav"]') 
-            || document.querySelector('button[title="Quick Navigation"]')
-            || document.querySelector('.fixed.top-4.left-4 button');
-        
-        if (hamburger) {
-            // Ensure it has the highest z-index
-            hamburger.style.zIndex = '999999';
-            hamburger.style.pointerEvents = 'auto';
-            hamburger.style.position = 'relative';
-            
-            // Make parent containers also clickable
-            let parent = hamburger.parentElement;
-            let depth = 0;
-            while (parent && depth < 5) {
-                if (parent.classList?.contains('fixed') || getComputedStyle(parent).position === 'fixed') {
-                    parent.style.zIndex = '999998';
-                    parent.style.pointerEvents = 'auto';
-                }
-                parent = parent.parentElement;
-                depth++;
-            }
-            
-            console.log('[MovieShows] Hamburger button fixed');
-        } else {
-            // Retry if not found yet (React might not have rendered)
-            setTimeout(fixHamburgerButton, 1000);
+        // Check if we already created it
+        if (document.getElementById('movieshows-hamburger')) {
+            console.log('[MovieShows] Hamburger already exists');
+            return;
         }
+        
+        // Create hamburger button
+        const hamburger = document.createElement('button');
+        hamburger.id = 'movieshows-hamburger';
+        hamburger.setAttribute('aria-label', 'Open Quick Nav');
+        hamburger.title = 'Open navigation menu';
+        hamburger.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        `;
+        hamburger.style.cssText = `
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 999999;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            pointer-events: auto;
+        `;
+        
+        // Hover effect
+        hamburger.onmouseenter = () => {
+            hamburger.style.background = 'rgba(34, 197, 94, 0.8)';
+            hamburger.style.transform = 'scale(1.05)';
+        };
+        hamburger.onmouseleave = () => {
+            hamburger.style.background = 'rgba(0, 0, 0, 0.6)';
+            hamburger.style.transform = 'scale(1)';
+        };
+        
+        // Create navigation panel
+        const navPanel = document.createElement('div');
+        navPanel.id = 'movieshows-nav-panel';
+        navPanel.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: -320px;
+            width: 300px;
+            height: 100vh;
+            background: rgba(10, 10, 15, 0.98);
+            backdrop-filter: blur(20px);
+            z-index: 999998;
+            transition: left 0.3s ease;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            pointer-events: auto;
+        `;
+        navPanel.innerHTML = `
+            <div style="padding: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+                    <h2 style="color: white; font-size: 20px; font-weight: bold; margin: 0;">🎬 MovieShows</h2>
+                    <button id="close-nav-panel" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer; padding: 8px;">&times;</button>
+                </div>
+                
+                <nav style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="#" class="nav-link" data-action="home" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; color: white; text-decoration: none; transition: all 0.2s;">
+                        <span style="font-size: 20px;">🏠</span>
+                        <span>Home</span>
+                    </a>
+                    <a href="#" class="nav-link" data-action="search" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; color: white; text-decoration: none; transition: all 0.2s;">
+                        <span style="font-size: 20px;">🔍</span>
+                        <span>Search</span>
+                    </a>
+                    <a href="#" class="nav-link" data-action="queue" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; color: white; text-decoration: none; transition: all 0.2s;">
+                        <span style="font-size: 20px;">📋</span>
+                        <span>My Queue</span>
+                    </a>
+                    <a href="#" class="nav-link" data-action="filters" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; color: white; text-decoration: none; transition: all 0.2s;">
+                        <span style="font-size: 20px;">🎛️</span>
+                        <span>Filters</span>
+                    </a>
+                    <a href="#" class="nav-link" data-action="settings" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; color: white; text-decoration: none; transition: all 0.2s;">
+                        <span style="font-size: 20px;">⚙️</span>
+                        <span>Settings</span>
+                    </a>
+                </nav>
+                
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 16px;">Quick Filters</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button class="quick-filter-btn" data-filter="all" style="padding: 8px 16px; border-radius: 20px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #22c55e; cursor: pointer; font-size: 13px;">All</button>
+                        <button class="quick-filter-btn" data-filter="movies" style="padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer; font-size: 13px;">Movies</button>
+                        <button class="quick-filter-btn" data-filter="tv" style="padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer; font-size: 13px;">TV Shows</button>
+                        <button class="quick-filter-btn" data-filter="nowplaying" style="padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer; font-size: 13px;">Now Playing</button>
+                    </div>
+                </div>
+                
+                <div style="position: absolute; bottom: 24px; left: 24px; right: 24px;">
+                    <p style="color: #666; font-size: 11px; text-align: center;">MovieShows v2.0</p>
+                </div>
+            </div>
+        `;
+        
+        // Add overlay for closing
+        const overlay = document.createElement('div');
+        overlay.id = 'nav-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999997;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        `;
+        
+        document.body.appendChild(hamburger);
+        document.body.appendChild(navPanel);
+        document.body.appendChild(overlay);
+        
+        let isNavOpen = false;
+        
+        const openNav = () => {
+            isNavOpen = true;
+            navPanel.style.left = '0';
+            overlay.style.opacity = '1';
+            overlay.style.pointerEvents = 'auto';
+            hamburger.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            `;
+        };
+        
+        const closeNav = () => {
+            isNavOpen = false;
+            navPanel.style.left = '-320px';
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            hamburger.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            `;
+        };
+        
+        // Toggle nav on hamburger click
+        hamburger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('[MovieShows] Hamburger clicked');
+            if (isNavOpen) {
+                closeNav();
+            } else {
+                openNav();
+            }
+        });
+        
+        // Close on overlay click
+        overlay.addEventListener('click', closeNav);
+        
+        // Close button
+        navPanel.querySelector('#close-nav-panel').addEventListener('click', closeNav);
+        
+        // Nav link actions
+        navPanel.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('mouseenter', () => {
+                link.style.background = 'rgba(34, 197, 94, 0.2)';
+            });
+            link.addEventListener('mouseleave', () => {
+                link.style.background = 'transparent';
+            });
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const action = link.dataset.action;
+                closeNav();
+                
+                setTimeout(() => {
+                    switch(action) {
+                        case 'home':
+                            scrollToSlide(0);
+                            break;
+                        case 'search':
+                            document.querySelector('button')?.click(); // trigger search
+                            const searchBtn = Array.from(document.querySelectorAll('button')).find(b => 
+                                b.textContent?.toLowerCase().includes('search') || 
+                                b.textContent?.toLowerCase().includes('browse')
+                            );
+                            if (searchBtn) searchBtn.click();
+                            break;
+                        case 'queue':
+                            const queueBtn = Array.from(document.querySelectorAll('button')).find(b => 
+                                b.textContent?.toLowerCase().includes('queue')
+                            );
+                            if (queueBtn) queueBtn.click();
+                            break;
+                        case 'filters':
+                            const filterBtn = Array.from(document.querySelectorAll('button')).find(b => 
+                                b.textContent?.toLowerCase().includes('filter')
+                            );
+                            if (filterBtn) filterBtn.click();
+                            break;
+                        case 'settings':
+                            showToast('Settings coming soon!');
+                            break;
+                    }
+                }, 100);
+            });
+        });
+        
+        // Quick filter buttons
+        navPanel.querySelectorAll('.quick-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+                closeNav();
+                repopulateFeed(filter);
+                
+                // Update button styles
+                navPanel.querySelectorAll('.quick-filter-btn').forEach(b => {
+                    if (b.dataset.filter === filter) {
+                        b.style.background = 'rgba(34, 197, 94, 0.2)';
+                        b.style.borderColor = '#22c55e';
+                        b.style.color = '#22c55e';
+                    } else {
+                        b.style.background = 'rgba(255,255,255,0.05)';
+                        b.style.borderColor = 'rgba(255,255,255,0.2)';
+                        b.style.color = 'white';
+                    }
+                });
+            });
+        });
+        
+        console.log('[MovieShows] Hamburger menu created successfully');
     }
     
     // Add tooltips to all buttons for user guidance
