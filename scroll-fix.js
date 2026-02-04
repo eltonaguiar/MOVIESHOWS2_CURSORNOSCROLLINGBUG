@@ -20,8 +20,9 @@
     let queueViewMode = localStorage.getItem("movieshows-queue-view") || "thumbnail"; // "thumbnail" or "text"
     let queueTabMode = "queue"; // Always default to queue tab showing Up Next
     
-    // ========== MUTE CONTROL ==========
+    // ========== MUTE & VOLUME CONTROL ==========
     let isMuted = localStorage.getItem("movieshows-muted") !== "false"; // Default to muted for autoplay
+    let volumeLevel = parseInt(localStorage.getItem("movieshows-volume") || "50"); // 0-100, default 50%
     let infoHidden = localStorage.getItem("movieshows-info-hidden") === "true";
     let actionPanelHidden = localStorage.getItem("movieshows-action-hidden") === "true";
     
@@ -209,6 +210,7 @@
         
         applyMuteStateToAllVideos();
         updateCenterMuteOverlay();
+        updateVolumeControlUI();
         console.log(`[MovieShows] Sound ${isMuted ? 'muted' : 'unmuted'}`);
         showToast(isMuted ? "Sound muted" : "Sound enabled!");
     }
@@ -219,22 +221,30 @@
         const overlay = document.createElement("div");
         overlay.id = "center-mute-overlay";
         overlay.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
-                <div style="font-size: 64px; line-height: 1;">🔇</div>
-                <div style="font-size: 22px; font-weight: bold;">Audio is Muted</div>
-                <button id="center-unmute-btn" style="
-                    background: #ef4444;
+            <div id="center-mute-clickable" style="
+                display: flex; 
+                flex-direction: column; 
+                align-items: center; 
+                gap: 20px;
+                cursor: pointer;
+                padding: 30px;
+                border-radius: 20px;
+                transition: all 0.2s;
+            ">
+                <div style="font-size: 80px; line-height: 1; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">🔇</div>
+                <div style="font-size: 26px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">Audio is Muted</div>
+                <div style="
+                    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
                     color: white;
                     border: none;
-                    padding: 18px 40px;
-                    border-radius: 30px;
-                    font-size: 20px;
+                    padding: 20px 50px;
+                    border-radius: 35px;
+                    font-size: 22px;
                     font-weight: bold;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
-                ">🔊 Click to Enable Sound</button>
-                <div style="font-size: 13px; opacity: 0.7; margin-top: 5px;">or press M key</div>
+                    box-shadow: 0 6px 25px rgba(239, 68, 68, 0.6);
+                    animation: pulse-button 2s infinite;
+                ">🔊 TAP TO ENABLE SOUND</div>
+                <div style="font-size: 14px; opacity: 0.8; margin-top: 5px;">or press <kbd style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 6px; font-family: monospace;">M</kbd> key</div>
             </div>
         `;
         overlay.style.cssText = `
@@ -243,52 +253,81 @@
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 10002;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 40px 50px;
-            border-radius: 20px;
+            padding: 20px;
+            border-radius: 25px;
             text-align: center;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 10px 50px rgba(0,0,0,0.7);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 15px 60px rgba(0,0,0,0.8);
             display: ${isMuted ? 'block' : 'none'};
             animation: fadeIn 0.3s ease;
+            border: 2px solid rgba(239, 68, 68, 0.5);
         `;
         
-        // Add fade animation
+        // Add animations
         if (!document.getElementById("fade-animation-style")) {
             const style = document.createElement("style");
             style.id = "fade-animation-style";
             style.textContent = `
                 @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
                 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+                @keyframes pulse-button { 
+                    0%, 100% { transform: scale(1); box-shadow: 0 6px 25px rgba(239, 68, 68, 0.6); } 
+                    50% { transform: scale(1.03); box-shadow: 0 8px 35px rgba(239, 68, 68, 0.8); } 
+                }
+                /* Volume slider styling */
+                #volume-slider::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 50%;
+                    background: #22c55e;
+                    cursor: pointer;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                    transition: all 0.15s;
+                }
+                #volume-slider::-webkit-slider-thumb:hover {
+                    transform: scale(1.2);
+                    background: #16a34a;
+                }
+                #volume-slider::-moz-range-thumb {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 50%;
+                    background: #22c55e;
+                    cursor: pointer;
+                    border: none;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                }
             `;
             document.head.appendChild(style);
         }
         
         document.body.appendChild(overlay);
         
-        // Add click handler to unmute button
-        const unmuteBtn = document.getElementById("center-unmute-btn");
-        if (unmuteBtn) {
-            unmuteBtn.addEventListener("click", () => {
+        // Make the ENTIRE clickable area work for unmuting
+        const clickableArea = document.getElementById("center-mute-clickable");
+        if (clickableArea) {
+            clickableArea.addEventListener("click", (e) => {
+                e.stopPropagation();
                 toggleMute();
             });
-            unmuteBtn.addEventListener("mouseenter", () => {
-                unmuteBtn.style.transform = "scale(1.05)";
-                unmuteBtn.style.background = "#dc2626";
+            clickableArea.addEventListener("mouseenter", () => {
+                clickableArea.style.background = "rgba(239, 68, 68, 0.15)";
+                clickableArea.style.transform = "scale(1.02)";
             });
-            unmuteBtn.addEventListener("mouseleave", () => {
-                unmuteBtn.style.transform = "scale(1)";
-                unmuteBtn.style.background = "#ef4444";
+            clickableArea.addEventListener("mouseleave", () => {
+                clickableArea.style.background = "transparent";
+                clickableArea.style.transform = "scale(1)";
             });
         }
         
-        // Also allow clicking anywhere on overlay to dismiss (but not unmute)
+        // Clicking outside the clickable area dismisses temporarily
         overlay.addEventListener("click", (e) => {
             if (e.target === overlay) {
-                // User clicked outside the button - just hide overlay temporarily
                 overlay.style.display = "none";
-                // Show it again after 30 seconds if still muted
                 setTimeout(() => {
                     if (isMuted && overlay) {
                         overlay.style.display = "block";
@@ -1769,6 +1808,25 @@
           <span style="color: #888; font-size: 11px; margin-right: 2px;">Dtl:</span>
           <button data-detail="full" class="active">Full</button>
           <button data-detail="title">Title</button>
+      </div>
+      <div id="volume-control-section" style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="color: #888; font-size: 11px;">🔊 Volume:</span>
+              <span id="volume-value" style="color: #22c55e; font-size: 12px; font-weight: bold;">${volumeLevel}%</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+              <button id="volume-mute-btn" style="padding: 4px 8px; font-size: 14px;">${isMuted ? '🔇' : '🔊'}</button>
+              <input type="range" id="volume-slider" min="0" max="100" value="${volumeLevel}" style="
+                  flex: 1;
+                  height: 6px;
+                  -webkit-appearance: none;
+                  appearance: none;
+                  background: linear-gradient(to right, #22c55e ${volumeLevel}%, #333 ${volumeLevel}%);
+                  border-radius: 3px;
+                  cursor: pointer;
+              ">
+          </div>
+      </div>
     `;
 
         const container = document.getElementById("player-size-control");
@@ -1822,6 +1880,39 @@
             document.getElementById('adj-down').addEventListener('click', () => { currentOffsetY -= 10; updateOffset(); });
             document.getElementById('adj-left').addEventListener('click', () => { currentOffsetX -= 10; updateOffset(); });
             document.getElementById('adj-right').addEventListener('click', () => { currentOffsetX += 10; updateOffset(); });
+            
+            // Volume Slider Control
+            const volumeSlider = document.getElementById('volume-slider');
+            const volumeValue = document.getElementById('volume-value');
+            const volumeMuteBtn = document.getElementById('volume-mute-btn');
+            
+            if (volumeSlider) {
+                volumeSlider.addEventListener('input', (e) => {
+                    volumeLevel = parseInt(e.target.value);
+                    localStorage.setItem("movieshows-volume", volumeLevel);
+                    volumeValue.textContent = `${volumeLevel}%`;
+                    // Update slider background gradient
+                    volumeSlider.style.background = `linear-gradient(to right, #22c55e ${volumeLevel}%, #333 ${volumeLevel}%)`;
+                    
+                    // If volume > 0 and currently muted, unmute
+                    if (volumeLevel > 0 && isMuted) {
+                        toggleMute();
+                    }
+                    // If volume is 0, mute
+                    if (volumeLevel === 0 && !isMuted) {
+                        toggleMute();
+                    }
+                    
+                    applyVolumeToVideos();
+                });
+            }
+            
+            if (volumeMuteBtn) {
+                volumeMuteBtn.addEventListener('click', () => {
+                    toggleMute();
+                    volumeMuteBtn.textContent = isMuted ? '🔇' : '🔊';
+                });
+            }
         } else {
             document.body.appendChild(control);
         }
@@ -1829,6 +1920,30 @@
         // Initialize saved layout
         const savedLayout = localStorage.getItem("movieshows-text-layout") || "default";
         setTextLayout(savedLayout);
+    }
+    
+    function applyVolumeToVideos() {
+        // Note: YouTube iframe API doesn't allow direct volume control without the JS API
+        // We use URL params for mute state. For volume, we'd need YouTube Player API
+        // For now, we show this is a preference that will be applied when possible
+        console.log(`[MovieShows] Volume set to ${volumeLevel}%`);
+    }
+    
+    function updateVolumeControlUI() {
+        const volumeSlider = document.getElementById('volume-slider');
+        const volumeValue = document.getElementById('volume-value');
+        const volumeMuteBtn = document.getElementById('volume-mute-btn');
+        
+        if (volumeSlider) {
+            volumeSlider.value = volumeLevel;
+            volumeSlider.style.background = `linear-gradient(to right, #22c55e ${volumeLevel}%, #333 ${volumeLevel}%)`;
+        }
+        if (volumeValue) {
+            volumeValue.textContent = `${volumeLevel}%`;
+        }
+        if (volumeMuteBtn) {
+            volumeMuteBtn.textContent = isMuted ? '🔇' : '🔊';
+        }
     }
 
     function setTextLayout(layout) {

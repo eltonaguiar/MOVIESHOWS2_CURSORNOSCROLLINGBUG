@@ -10,7 +10,9 @@
         'queue-panel', 'queue-modal', 'queue-overlay',
         'filter-panel', 'filter-modal', 'filters',
         'quick-nav', 'quicknav', 'nav-panel',
-        'mute-control', 'mute'
+        'mute-control', 'mute',
+        'player-size-wrapper', 'player-size-control', 'settings-toggle',
+        'layout-control', 'volume-control', 'volume-slider'
     ];
     
     function shouldNeverHide(element) {
@@ -82,21 +84,10 @@
     }
     
     function hideSettingsPanel() {
-        // Only hide the right-side settings panel, not search/queue panels
-        document.querySelectorAll('div').forEach(div => {
-            // Skip essential panels
-            if (shouldNeverHide(div)) return;
-            
-            const style = div.getAttribute('style') || '';
-            const text = (div.textContent || '').substring(0, 200);
-            
-            // Only hide if it's a settings-type panel (has Player:, Txt:, Bar: content)
-            if ((text.includes('Player:') && text.includes('S') && text.includes('M') && text.includes('L')) ||
-                (text.includes('Txt:') && text.includes('Def')) ||
-                (text.includes('Bar:') && text.includes('Show'))) {
-                div.style.display = 'none';
-            }
-        });
+        // NO LONGER HIDE settings panel - we need it for volume control
+        // The settings panel now has important user controls like volume slider
+        // Users can collapse it themselves using the Settings toggle button
+        return;
     }
     
     function addMinimalStyles() {
