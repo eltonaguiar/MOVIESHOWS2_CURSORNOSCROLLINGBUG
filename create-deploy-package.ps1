@@ -30,6 +30,8 @@ $rootFiles = @(
     "features-batch6.js",
     "features-batch7.js",
     "features-batch8.js",
+    "features-batch9.js",
+    "features-batch10.js",
     "movies-database.json",
     "favicon.ico",
     ".nojekyll",
